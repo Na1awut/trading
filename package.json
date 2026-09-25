@@ -12,7 +12,7 @@
     "dev:api": "pnpm --filter @signals/api dev",
     "dev:worker": "pnpm --filter @signals/worker dev",
     "dev:mobile": "pnpm --filter @signals/mobile start",
-    "build": "pnpm -r --filter \"./packages/**\" --filter @signals/api --filter @signals/worker build",
+    "build": "pnpm --filter @signals/api --filter @signals/worker build",
     "test": "vitest run",
     "test:unit": "vitest run --project signal-engine --project market-data --project config --project notifications",
     "test:watch": "vitest",

@@ -1,6 +1,8 @@
 import { defineConfig } from 'tsup';
 
-// Bundles workspace packages (shipped as TS source) into dist/; npm deps stay external.
+// Workspace packages ship as TypeScript source, so they are bundled into dist/.
+// Every other node_modules import (including transitive ones such as @prisma/client,
+// which is CommonJS) stays external and is resolved at runtime.
 export default defineConfig({
   entry: ['src/server.ts'],
   format: ['esm'],
@@ -8,5 +10,6 @@ export default defineConfig({
   platform: 'node',
   sourcemap: true,
   clean: true,
+  skipNodeModulesBundle: true,
   noExternal: [/^@signals\//],
 });
