@@ -4,6 +4,8 @@ import { createPrismaClient } from '@signals/db';
 import { createMarketDataProvider } from '@signals/market-data';
 import { createNotificationSender } from '@signals/notifications';
 import { createWorkerRuntime, runEvaluationCycle, type WorkerSettings } from './evaluation-cycle';
+import { runNotificationSweep } from './notifications/delivery';
+import type { DeliverySettings } from './notifications/settings';
 import { startScheduler } from './scheduler';
 
 async function main() {
@@ -32,6 +34,14 @@ async function main() {
     shardCount: config.WORKER_SHARD_COUNT,
   };
   const runtime = createWorkerRuntime(settings);
+  const delivery: DeliverySettings = {
+    maxAttempts: config.NOTIFICATION_MAX_ATTEMPTS,
+    retryBaseMs: config.NOTIFICATION_RETRY_BASE_MS,
+    retryMaxMs: config.NOTIFICATION_RETRY_MAX_MS,
+    sendingTimeoutMs: config.NOTIFICATION_SENDING_TIMEOUT_MS,
+    maxAgeMs: config.NOTIFICATION_MAX_AGE_MS,
+    sweepBatch: config.NOTIFICATION_SWEEP_BATCH,
+  };
   const notifier = createNotificationSender(config.NOTIFICATION_DRIVER, logger, {
     projectId: config.FIREBASE_PROJECT_ID,
     serviceAccountPath: config.FIREBASE_SERVICE_ACCOUNT_PATH,
@@ -46,7 +56,12 @@ async function main() {
       logger,
       settings,
       runtime,
+      delivery,
     });
+    // Retry sweep: PENDING after a crash, FAILED with elapsed back-off, stale SENDING claims,
+    // and notifications deferred by quiet hours.
+    const sweep = await runNotificationSweep({ prisma, notifier, logger, delivery });
+    if (sweep.candidates > 0) logger.info(sweep, 'notification sweep complete');
     const level = summary.triggered > 0 || summary.errors > 0 ? 'info' : 'debug';
     logger[level](summary, 'evaluation cycle complete');
   };

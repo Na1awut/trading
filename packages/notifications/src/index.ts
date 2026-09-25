@@ -12,6 +12,6 @@ export function createNotificationSender(
   logger: Logger,
   firebase: FirebaseAdminOptions = {},
 ): NotificationSender {
-  if (driver === 'fcm') return new FcmNotificationSender(getFirebaseAdminApp(firebase), logger);
+  if (driver === 'fcm') return FcmNotificationSender.fromApp(getFirebaseAdminApp(firebase), logger);
   return new ConsoleNotificationSender(logger);
 }

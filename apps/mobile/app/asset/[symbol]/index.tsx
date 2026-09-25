@@ -156,7 +156,7 @@ export default function AssetDetailScreen() {
               event={e}
               showTicker={false}
               currency={currency}
-              onPress={() => router.push(`/event/${e.id}`)}
+              onPress={() => router.push(`/signals/events/${e.id}`)}
             />
           ))}
         </View>

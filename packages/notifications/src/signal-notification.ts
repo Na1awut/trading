@@ -4,7 +4,8 @@ export const DEEP_LINK_SCHEME = 'stocksignals';
 
 export interface SignalNotificationInput {
   eventId: string;
-  ticker: string;
+  symbol: string;
+  signalType: string;
   /** Rule label, e.g. "EMA Bullish Cross". */
   label: string;
   /** Explanation, e.g. "EMA 9 crossed above EMA 21 at $182.30". */
@@ -12,20 +13,29 @@ export interface SignalNotificationInput {
   timeframe: string;
 }
 
+/** Deep link opened when the notification is tapped. */
+export function signalEventDeepLink(eventId: string): string {
+  return `${DEEP_LINK_SCHEME}://signals/events/${encodeURIComponent(eventId)}`;
+}
+
 /**
  * Title: "NVDA — EMA Bullish Cross"
- * Body:  "EMA 9 crossed above EMA 21 at $182.30 (1h)"
- * Data:  deep link to the asset detail screen, opened when the user taps.
+ * Body:  "EMA 9 crossed above EMA 21 at $182.30 (5m)"
+ * Data:  identifiers only (eventId, symbol, signalType, timeframe, url) - no user data,
+ *        no tokens; the app fetches details from the API after authenticating.
  */
 export function buildSignalNotification(input: SignalNotificationInput): PushMessage {
   return {
-    title: `${input.ticker} — ${input.label}`,
+    title: `${input.symbol} — ${input.label}`,
     body: `${input.message} (${input.timeframe})`,
     data: {
       type: 'signal',
       eventId: input.eventId,
-      ticker: input.ticker,
-      url: `${DEEP_LINK_SCHEME}://asset/${encodeURIComponent(input.ticker)}`,
+      symbol: input.symbol,
+      signalType: input.signalType,
+      timeframe: input.timeframe,
+      url: signalEventDeepLink(input.eventId),
     },
+    collapseId: input.eventId,
   };
 }

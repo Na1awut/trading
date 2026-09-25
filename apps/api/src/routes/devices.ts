@@ -10,6 +10,8 @@ export const deviceRoutes: FastifyPluginAsyncZod<AppDeps> = async (app, deps) =>
       schema: {
         tags: ['devices'],
         summary: 'Register (or refresh) a push token for the current user',
+        description:
+          'Call on every app start and whenever the OS rotates the token. Re-registering an existing token updates lastSeenAt and moves it to the current user.',
         body: RegisterDeviceBodySchema,
         response: { 201: z.object({ id: z.string() }) },
       },
@@ -22,6 +24,17 @@ export const deviceRoutes: FastifyPluginAsyncZod<AppDeps> = async (app, deps) =>
         update: { userId: req.user.id, platform, provider, lastSeenAt: new Date() },
         create: { userId: req.user.id, token, platform, provider },
       });
+      // Multiple devices per user are supported; cap them so a buggy client (or token
+      // churn) cannot grow the fan-out without bound. Least recently seen go first.
+      const stale = await deps.prisma.device.findMany({
+        where: { userId: req.user.id },
+        orderBy: { lastSeenAt: 'desc' },
+        skip: deps.config.MAX_DEVICES_PER_USER,
+        select: { id: true },
+      });
+      if (stale.length > 0) {
+        await deps.prisma.device.deleteMany({ where: { id: { in: stale.map((d) => d.id) } } });
+      }
       return reply.status(201).send({ id: device.id });
     },
   );

@@ -11,7 +11,8 @@ import {
 import { latestClosedCandleOpenTime, type Timeframe } from '@signals/types';
 import { loadCandleWindow } from './candle-source';
 import { mapWithConcurrency } from './concurrency';
-import { fanOutSignal } from './deliver';
+import { fanOutSignal } from './notifications/events';
+import type { DeliverySettings } from './notifications/settings';
 import { PairFetchTracker } from './pair-tracker';
 
 export interface WorkerSettings {
@@ -46,6 +47,7 @@ export interface CycleDeps {
   runtime?: WorkerRuntime;
   /** Persist/read candles via MarketCandle (default true). */
   ingest?: boolean;
+  delivery?: Partial<DeliverySettings>;
   /** Back-compat aliases (Phase 1 options). */
   candleLookback?: number;
   fetchConcurrency?: number;
@@ -324,7 +326,7 @@ async function evaluatePair(
         );
         // Events BEFORE state: a crash in between re-evaluates the candle next cycle and the
         // unique constraint absorbs the duplicate.
-        const r = await fanOutSignal(deps, def, evaluation);
+        const r = await fanOutSignal(deps, def, evaluation, now);
         summary.eventsCreated += r.created;
         summary.duplicatesSkipped += r.duplicates;
         summary.notificationsSent += r.notificationsSent;

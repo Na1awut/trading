@@ -85,7 +85,7 @@ describe('vertical slice: add NVDA -> EMA 9/21 bullish cross -> event -> notific
       price: crossCandle.close,
       candleTime: new Date(crossCandle.time).toISOString(),
       message: `EMA 9 crossed above EMA 21 at $${crossCandle.close.toFixed(2)}`,
-      deliveryStatus: 'SENT',
+      notificationStatus: 'SENT',
     });
     expect(event!.values.ema9!).toBeGreaterThan(event!.values.ema21!);
     expect(event!.values).toHaveProperty('rsi14');
@@ -110,9 +110,12 @@ describe('vertical slice: add NVDA -> EMA 9/21 bullish cross -> event -> notific
       data: {
         type: 'signal',
         eventId: event!.id,
-        ticker: 'NVDA',
-        url: 'stocksignals://asset/NVDA',
+        symbol: 'NVDA',
+        signalType: 'EMA_BULLISH_CROSS',
+        timeframe: '5m',
+        url: `stocksignals://signals/events/${event!.id}`,
       },
+      collapseId: event!.id,
     });
 
     const state = await prisma.signalState.findFirstOrThrow();
@@ -230,7 +233,7 @@ describe('fan-out and notification settings', () => {
       include: { user: true },
       orderBy: { user: { email: 'asc' } },
     });
-    expect(events.map((e) => [e.user.email, e.deliveryStatus, e.deliveryError])).toEqual([
+    expect(events.map((e) => [e.user.email, e.notificationStatus, e.notificationError])).toEqual([
       ['category@example.com', 'SUPPRESSED', 'MOVING_AVERAGE alerts disabled'],
       ['global@example.com', 'SUPPRESSED', 'alerts disabled globally'],
       ['ticker@example.com', 'SUPPRESSED', 'alerts disabled for NVDA'],
@@ -254,14 +257,14 @@ describe('fan-out and notification settings', () => {
   it('marks NO_DEVICES when the user has no registered device', async () => {
     await user('alice@example.com', { device: false });
     await cycle(scripted(buildEmaBullishCrossScenario({ now: NOW, timeframe: TF })));
-    expect((await prisma.signalEvent.findFirstOrThrow()).deliveryStatus).toBe('NO_DEVICES');
+    expect((await prisma.signalEvent.findFirstOrThrow()).notificationStatus).toBe('NO_DEVICES');
   });
 
-  it('removes permanently invalid push tokens and marks the event FAILED', async () => {
+  it('removes permanently invalid push tokens (no device left -> NO_DEVICES, nothing to retry)', async () => {
     await user('alice@example.com');
     notifier.invalidTokens.add('token-alice@example.com');
     await cycle(scripted(buildEmaBullishCrossScenario({ now: NOW, timeframe: TF })));
-    expect((await prisma.signalEvent.findFirstOrThrow()).deliveryStatus).toBe('FAILED');
+    expect((await prisma.signalEvent.findFirstOrThrow()).notificationStatus).toBe('NO_DEVICES');
     expect(await prisma.device.count()).toBe(0);
   });
 });

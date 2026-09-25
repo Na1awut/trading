@@ -336,7 +336,7 @@ describe('signal events', () => {
           price: 180 + i,
           values: { ema9: 181.9, ema21: 181.7, rsi14: 63.2 },
           message: `EMA 9 crossed above EMA 21 at $${180 + i}.00`,
-          deliveryStatus: 'SENT',
+          notificationStatus: 'SENT',
         },
       });
     }
@@ -472,5 +472,28 @@ describe('rate limiting', () => {
       codes.push((await limited.inject({ method: 'GET', url: '/health' })).statusCode);
     expect(codes).toEqual([200, 200, 200, 429]);
     await limited.close();
+  });
+});
+
+describe('device registration limits', () => {
+  it('supports multiple devices per user and prunes the least recently seen beyond the cap', async () => {
+    const { app: capped, notifier: n } = await makeApp({ MAX_DEVICES_PER_USER: '2' });
+    const register = (token: string) =>
+      capped.inject({
+        method: 'POST',
+        url: '/devices/register',
+        headers: auth(),
+        payload: { token, platform: 'android' },
+      });
+    await register('device-token-aaaaaaaaaa');
+    await register('device-token-bbbbbbbbbb');
+    await register('device-token-aaaaaaaaaa'); // refresh: 'a' is now most recent
+    await register('device-token-cccccccccc');
+    const tokens = (await prisma.device.findMany()).map((d) => d.token).sort();
+    expect(tokens).toEqual(['device-token-aaaaaaaaaa', 'device-token-cccccccccc']);
+    const res = await capped.inject({ method: 'POST', url: '/devices/test', headers: auth() });
+    expect(res.json()).toEqual({ devices: 2, delivered: 2 });
+    expect(n.sent[0]!.targets).toHaveLength(2);
+    await capped.close();
   });
 });

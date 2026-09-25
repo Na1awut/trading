@@ -23,7 +23,8 @@ function RootNavigator() {
       <Stack.Screen name="search" options={{ title: 'Add ticker', presentation: 'modal' }} />
       <Stack.Screen name="asset/[symbol]/index" options={{ title: '' }} />
       <Stack.Screen name="asset/[symbol]/signals" options={{ title: 'Signals' }} />
-      <Stack.Screen name="event/[id]" options={{ title: 'Signal explained' }} />
+      <Stack.Screen name="signals/events/[eventId]" options={{ title: 'Signal explained' }} />
+      <Stack.Screen name="event/[id]" options={{ headerShown: false }} />
     </Stack>
   );
 }

@@ -78,7 +78,10 @@ export const SignalEventSchema = z.object({
   /** Structured explanation; null for events recorded before evidence existed. */
   evidence: SignalEvidenceSchema.nullable(),
   message: z.string(),
-  deliveryStatus: z.enum(['PENDING', 'SENT', 'SUPPRESSED', 'NO_DEVICES', 'FAILED']),
+  notificationStatus: z.enum(['PENDING', 'SENDING', 'SENT', 'FAILED', 'SUPPRESSED', 'NO_DEVICES']),
+  notificationSentAt: z.string().nullable(),
+  /** Set while a push is deferred (quiet hours) or waiting for a retry. */
+  nextNotificationAttemptAt: z.string().nullable(),
 });
 export type SignalEventDTO = z.infer<typeof SignalEventSchema>;
 

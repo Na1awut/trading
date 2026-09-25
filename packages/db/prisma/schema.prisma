@@ -52,12 +52,17 @@ enum PushProvider {
   EXPO
 }
 
-enum DeliveryStatus {
+/// Push delivery state machine for a SignalEvent:
+///   PENDING --claim--> SENDING --> SENT
+///                          |------> FAILED (retry scheduled while attempts < max)
+///   PENDING --> SUPPRESSED (preferences) | NO_DEVICES
+enum NotificationStatus {
   PENDING
+  SENDING
   SENT
-  SUPPRESSED // alerts disabled globally / for the ticker / for the category
-  NO_DEVICES
   FAILED
+  SUPPRESSED // alerts disabled globally / for the ticker / for the category / below min strength
+  NO_DEVICES
 }
 
 enum NotificationFrequency {
@@ -229,14 +234,20 @@ model SignalEvent {
   /// Null only for events created before Phase 2.
   evidence           Json?
   message            String
-  deliveryStatus     DeliveryStatus    @default(PENDING)
-  deliveredAt        DateTime?
-  deliveryError      String?
+  notificationStatus        NotificationStatus @default(PENDING)
+  notificationAttempts      Int                @default(0)
+  lastNotificationAttemptAt DateTime?
+  /// When the next send attempt is due (retry back-off or end of quiet hours); null = none.
+  nextNotificationAttemptAt DateTime?
+  notificationSentAt        DateTime?
+  notificationError         String?
 
   /// Idempotency: one event per user/signal/candle, even with concurrent workers.
   @@unique([userId, ticker, signalDefinitionId, timeframe, candleTime], name: "event_idempotency")
   @@index([userId, triggeredAt(sort: Desc)])
   @@index([userId, ticker, triggeredAt(sort: Desc)])
+  /// Retry sweep: due PENDING/FAILED events and stale SENDING claims.
+  @@index([notificationStatus, nextNotificationAttemptAt])
 }
 
 /// Ingested OHLCV history. The composite PK doubles as the (symbol, timeframe, time) range index.

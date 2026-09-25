@@ -61,6 +61,8 @@ const EnvSchema = z
     NOTIFICATION_RETRY_MAX_MS: ms(30 * 60_000, 1_000),
     /** A SENDING claim older than this is assumed crashed and becomes retryable. */
     NOTIFICATION_SENDING_TIMEOUT_MS: ms(120_000, 10_000),
+    /** Undelivered notifications older than this are abandoned (never send stale alerts). */
+    NOTIFICATION_MAX_AGE_MS: ms(24 * 3_600_000, 60_000),
     NOTIFICATION_SWEEP_BATCH: z.coerce.number().int().min(1).max(1000).default(100),
 
     /* ---------------------------- Market data -------------------------- */

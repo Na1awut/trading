@@ -49,7 +49,9 @@ export function toSignalEventDTO(e: SignalEvent): SignalEventDTO {
     values: e.values as SignalValues,
     evidence: (e.evidence as SignalEvidence | null) ?? null,
     message: e.message,
-    deliveryStatus: e.deliveryStatus,
+    notificationStatus: e.notificationStatus,
+    notificationSentAt: e.notificationSentAt?.toISOString() ?? null,
+    nextNotificationAttemptAt: e.nextNotificationAttemptAt?.toISOString() ?? null,
   };
 }
 

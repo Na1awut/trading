@@ -9,8 +9,13 @@ export interface PushTarget {
 export interface PushMessage {
   title: string;
   body: string;
-  /** String-only payload (FCM requirement). Used for deep links on tap. */
+  /** String-only payload (FCM requirement). Used for deep links on tap. Never put secrets here. */
   data: Record<string, string>;
+  /**
+   * Stable id (the SignalEvent id). Used as the Android notification tag / APNs collapse id
+   * so a retried send replaces - rather than duplicates - an already-delivered notification.
+   */
+  collapseId?: string;
 }
 
 export interface SendResult {
@@ -19,6 +24,8 @@ export interface SendResult {
   error?: string;
   /** Token is permanently invalid (app uninstalled, etc.) and should be deleted. */
   invalidToken?: boolean;
+  /** Failure may succeed later (quota, unavailable, internal); retry with back-off. */
+  retryable?: boolean;
 }
 
 export interface NotificationSender {
