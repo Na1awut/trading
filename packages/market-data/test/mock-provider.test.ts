@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { completedCandles, ema } from '@signals/signal-engine';
-import { MockMarketDataProvider, UnknownSymbolError } from '../src';
+import { CachedMarketDataProvider, MockMarketDataProvider, UnknownSymbolError } from '../src';
 
 const NOW = Date.UTC(2026, 8, 25, 14, 37, 30);
 
@@ -65,5 +65,32 @@ describe('MockMarketDataProvider', () => {
 
   it('throws for unknown symbols', async () => {
     await expect(provider.getQuote('NOPE')).rejects.toBeInstanceOf(UnknownSymbolError);
+  });
+});
+
+describe('CachedMarketDataProvider', () => {
+  it('serves repeated requests from cache until the TTL expires', async () => {
+    let t = NOW;
+    const inner = new MockMarketDataProvider({ now: () => t });
+    let calls = 0;
+    const counting = Object.assign(Object.create(inner), {
+      getQuote: (s: string) => {
+        calls++;
+        return inner.getQuote(s);
+      },
+    });
+    const cached = new CachedMarketDataProvider(counting, 5_000, 100, () => t);
+    await cached.getQuote('NVDA');
+    await cached.getQuote('NVDA');
+    expect(calls).toBe(1);
+    t += 6_000;
+    await cached.getQuote('NVDA');
+    expect(calls).toBe(2);
+  });
+
+  it('does not cache failures', async () => {
+    const cached = new CachedMarketDataProvider(new MockMarketDataProvider({ now: () => NOW }));
+    await expect(cached.getQuote('NOPE')).rejects.toBeInstanceOf(UnknownSymbolError);
+    await expect(cached.getQuote('NOPE')).rejects.toBeInstanceOf(UnknownSymbolError);
   });
 });

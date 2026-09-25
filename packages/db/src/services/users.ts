@@ -10,6 +10,15 @@ export interface IdentityClaims {
 
 /** First authenticated request provisions the user, settings row and default watchlist. */
 export async function findOrCreateUser(db: Db, claims: IdentityClaims) {
+  // Fast path: most requests come from existing users - avoid a write per request.
+  const existing = await db.user.findUnique({ where: { firebaseUid: claims.firebaseUid } });
+  if (
+    existing &&
+    (claims.email === undefined || claims.email === existing.email) &&
+    (claims.displayName === undefined || claims.displayName === existing.displayName)
+  ) {
+    return existing;
+  }
   const user = await db.user.upsert({
     where: { firebaseUid: claims.firebaseUid },
     update: { email: claims.email ?? undefined, displayName: claims.displayName ?? undefined },

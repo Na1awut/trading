@@ -7,6 +7,7 @@ export * from './catalog';
 export * from './mock-provider';
 export * from './scripted-provider';
 export * from './real-provider';
+export * from './cached-provider';
 
 export interface MarketDataConfig {
   provider: 'mock' | 'real';
