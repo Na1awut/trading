@@ -1,6 +1,10 @@
-import { LOG_REDACT_PATHS, loadConfig } from '@signals/config';
+import { LOG_REDACT_PATHS, Metrics, loadConfig } from '@signals/config';
 import { createPrismaClient } from '@signals/db';
-import { CachedMarketDataProvider, createMarketDataProvider } from '@signals/market-data';
+import {
+  CachedMarketDataProvider,
+  createMarketDataProvider,
+  recordMarketDataObservation,
+} from '@signals/market-data';
 import { createNotificationSender, getFirebaseAdminApp } from '@signals/notifications';
 import { getAuth } from 'firebase-admin/auth';
 import { pino } from 'pino';
@@ -11,6 +15,7 @@ async function main() {
   const config = loadConfig();
   const logger = pino({ level: config.LOG_LEVEL, name: 'api', redact: LOG_REDACT_PATHS });
   const prisma = createPrismaClient(config.DATABASE_URL);
+  const metrics = new Metrics();
   const firebase = {
     projectId: config.FIREBASE_PROJECT_ID,
     serviceAccountPath: config.FIREBASE_SERVICE_ACCOUNT_PATH,
@@ -29,10 +34,15 @@ async function main() {
       requestsPerMinute: config.MARKET_DATA_RATE_LIMIT_PER_MINUTE,
       sessionMode: config.MARKET_SESSION_MODE,
       logger: logger.child({ component: 'market-data' }),
+      onResponse: (o) => recordMarketDataObservation(metrics, o),
     }),
     {
       quoteTtlMs: config.MARKET_DATA_QUOTE_TTL_MS,
       candleCloseGraceMs: config.CANDLE_CLOSE_GRACE_MS,
+      onCacheResult: (kind, hit) =>
+        metrics.inc(hit ? 'market_data_cache_hits_total' : 'market_data_cache_misses_total', {
+          kind,
+        }),
     },
   );
   const authVerifier =
@@ -50,6 +60,7 @@ async function main() {
       marketData,
       authVerifier,
       notifier: createNotificationSender(config.NOTIFICATION_DRIVER, logger, firebase),
+      metrics,
     },
     { logger },
   );

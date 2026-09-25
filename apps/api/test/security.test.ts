@@ -186,3 +186,61 @@ describe('input validation', () => {
     await app.close();
   });
 });
+
+describe('GET /metrics', () => {
+  it('does not exist unless METRICS_TOKEN is configured', async () => {
+    const { app } = await makeApp();
+    expect((await app.inject({ method: 'GET', url: '/metrics' })).statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('requires the metrics token and reports cache hits/misses and requests', async () => {
+    const { Metrics } = await import('@signals/config');
+    const { CachedMarketDataProvider } = await import('@signals/market-data');
+    const metrics = new Metrics();
+    const marketData = new CachedMarketDataProvider(new MockMarketDataProvider(), {
+      onCacheResult: (kind, hit) =>
+        metrics.inc(hit ? 'market_data_cache_hits_total' : 'market_data_cache_misses_total', {
+          kind,
+        }),
+    });
+    const app = await buildApp(
+      {
+        config: parseConfig({
+          DATABASE_URL,
+          LOG_LEVEL: 'silent',
+          METRICS_TOKEN: 'metrics-token-0123456789',
+        }),
+        prisma,
+        marketData,
+        notifier: new RecordingNotificationSender(),
+        authVerifier: new DevAuthVerifier(),
+        metrics,
+      },
+      { logger: false },
+    );
+    await app.inject({
+      method: 'POST',
+      url: '/watchlist',
+      headers: auth(),
+      payload: { symbol: 'NVDA' },
+    });
+    await app.inject({ method: 'GET', url: '/watchlist', headers: auth() });
+    await app.inject({ method: 'GET', url: '/watchlist', headers: auth() });
+
+    expect((await app.inject({ method: 'GET', url: '/metrics', headers: auth() })).statusCode).toBe(
+      401,
+    );
+    const res = await app.inject({
+      method: 'GET',
+      url: '/metrics',
+      headers: { authorization: 'Bearer metrics-token-0123456789' },
+    });
+    expect(res.statusCode).toBe(200);
+    const { counters } = res.json();
+    expect(counters['market_data_cache_misses_total{kind="quote"}']).toBe(1);
+    expect(counters['market_data_cache_hits_total{kind="quote"}']).toBe(2);
+    expect(counters['http_requests_total{route="/watchlist",status="2xx"}']).toBe(3);
+    await app.close();
+  });
+});

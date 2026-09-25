@@ -1,11 +1,11 @@
 import { pino } from 'pino';
-import { LOG_REDACT_PATHS, loadConfig } from '@signals/config';
+import { LOG_REDACT_PATHS, Metrics, loadConfig } from '@signals/config';
 import { createPrismaClient } from '@signals/db';
-import { createMarketDataProvider } from '@signals/market-data';
+import { createMarketDataProvider, recordMarketDataObservation } from '@signals/market-data';
 import { createNotificationSender } from '@signals/notifications';
 import { strengthModelFromList } from '@signals/signal-engine';
 import { createWorkerRuntime, runEvaluationCycle, type WorkerSettings } from './evaluation-cycle';
-import { runNotificationSweep } from './notifications/delivery';
+import { countPendingNotifications, runNotificationSweep } from './notifications/delivery';
 import type { DeliverySettings } from './notifications/settings';
 import { WorkerHealth, startHealthServer } from './health';
 import { runCandleRetention } from './retention';
@@ -15,6 +15,7 @@ async function main() {
   const config = loadConfig();
   const logger = pino({ level: config.LOG_LEVEL, name: 'worker', redact: LOG_REDACT_PATHS });
   const prisma = createPrismaClient(config.DATABASE_URL);
+  const metrics = new Metrics();
   const marketData = createMarketDataProvider({
     provider: config.MARKET_DATA_PROVIDER,
     vendor: config.MARKET_DATA_VENDOR,
@@ -27,6 +28,7 @@ async function main() {
     requestsPerMinute: config.MARKET_DATA_RATE_LIMIT_PER_MINUTE,
     sessionMode: config.MARKET_SESSION_MODE,
     logger: logger.child({ component: 'market-data' }),
+    onResponse: (o) => recordMarketDataObservation(metrics, o),
   });
   const settings: WorkerSettings = {
     candleLookback: config.SIGNAL_CANDLE_LOOKBACK,
@@ -62,6 +64,7 @@ async function main() {
     '1d': config.CANDLE_RETENTION_DAYS_1D,
   } as const;
   let lastRetentionAt = 0;
+  let lastMetricsLogAt = Date.now();
 
   const cycle = async () => {
     try {
@@ -73,6 +76,7 @@ async function main() {
         settings,
         runtime,
         delivery,
+        metrics,
       });
       // Always logged: cycle id, pairs, subscriptions evaluated, events, notifications, duration.
       const quiet = summary.triggered === 0 && summary.errors === 0 && summary.pairsFetched === 0;
@@ -80,7 +84,8 @@ async function main() {
 
       // Retry sweep: PENDING after a crash, FAILED with elapsed back-off, stale SENDING
       // claims, and notifications deferred by quiet hours.
-      const sweep = await runNotificationSweep({ prisma, notifier, logger, delivery });
+      const sweep = await runNotificationSweep({ prisma, notifier, logger, delivery, metrics });
+      metrics.set('notifications_pending', await countPendingNotifications(prisma));
       if (sweep.candidates > 0) logger.info(sweep, 'notification sweep complete');
 
       if (Date.now() - lastRetentionAt >= config.RETENTION_INTERVAL_MS) {
@@ -89,8 +94,16 @@ async function main() {
         logger.info(retention, 'candle retention complete');
       }
       health.recordSuccess();
+      if (
+        config.METRICS_LOG_INTERVAL_MS &&
+        Date.now() - lastMetricsLogAt >= config.METRICS_LOG_INTERVAL_MS
+      ) {
+        lastMetricsLogAt = Date.now();
+        logger.info(metrics.snapshot(), 'metrics snapshot');
+      }
     } catch (err) {
       health.recordFailure();
+      metrics.inc('worker_cycle_failures_total');
       throw err;
     }
   };
@@ -115,7 +128,7 @@ async function main() {
     logger,
   });
   const healthServer = config.WORKER_HEALTH_PORT
-    ? startHealthServer(health, config.WORKER_HEALTH_PORT)
+    ? startHealthServer(health, config.WORKER_HEALTH_PORT, metrics)
     : null;
 
   const shutdown = async (signal: string) => {

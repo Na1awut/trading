@@ -10,6 +10,7 @@ import {
   type SignalEvaluation,
   type StrengthModel,
 } from '@signals/signal-engine';
+import type { Metrics } from '@signals/config';
 import { latestClosedCandleOpenTime, type Timeframe } from '@signals/types';
 import { loadCandleWindow } from './candle-source';
 import { mapWithConcurrency } from './concurrency';
@@ -52,6 +53,8 @@ export interface CycleDeps {
   /** Persist/read candles via MarketCandle (default true). */
   ingest?: boolean;
   delivery?: Partial<DeliverySettings>;
+  /** Optional metrics sink (see @signals/config Metrics). */
+  metrics?: Metrics;
   /** Back-compat aliases (Phase 1 options). */
   candleLookback?: number;
   fetchConcurrency?: number;
@@ -81,6 +84,8 @@ export interface CycleSummary {
   pairsSkippedUpToDate: number;
   pairsBackedOff: number;
   pairsFetched: number;
+  /** Pairs evaluated entirely from stored candles (no vendor call). */
+  pairsServedFromStore: number;
   candlesFetched: number;
   stalePairs: number;
   /** Distinct indicator series computed (shared by all signals of a pair). */
@@ -128,6 +133,7 @@ export async function runEvaluationCycle(deps: CycleDeps): Promise<CycleSummary>
     pairsSkippedUpToDate: 0,
     pairsBackedOff: 0,
     pairsFetched: 0,
+    pairsServedFromStore: 0,
     candlesFetched: 0,
     stalePairs: 0,
     indicatorSeriesComputed: 0,
@@ -205,7 +211,28 @@ export async function runEvaluationCycle(deps: CycleDeps): Promise<CycleSummary>
   );
 
   summary.durationMs = Date.now() - started;
+  recordCycleMetrics(deps.metrics, summary);
   return summary;
+}
+
+function recordCycleMetrics(m: Metrics | undefined, s: CycleSummary): void {
+  if (!m) return;
+  m.inc('worker_cycles_total');
+  m.observe('worker_cycle_duration_ms', s.durationMs);
+  m.inc(
+    'worker_pairs_evaluated_total',
+    undefined,
+    s.pairs - s.pairsSkippedUpToDate - s.pairsBackedOff,
+  );
+  m.inc('worker_pairs_skipped_total', { reason: 'up_to_date' }, s.pairsSkippedUpToDate);
+  m.inc('worker_pairs_skipped_total', { reason: 'backoff' }, s.pairsBackedOff);
+  m.inc('candle_store_hits_total', undefined, s.pairsServedFromStore);
+  m.inc('candle_store_misses_total', undefined, s.pairsFetched);
+  m.inc('worker_subscriptions_evaluated_total', undefined, s.subscriptionsEvaluated);
+  m.inc('signals_triggered_total', undefined, s.triggered);
+  m.inc('signal_events_created_total', undefined, s.eventsCreated);
+  m.inc('signal_events_duplicate_total', undefined, s.duplicatesSkipped);
+  m.inc('worker_pair_errors_total', undefined, s.errors);
 }
 
 interface PairResult {
@@ -251,6 +278,8 @@ async function evaluatePair(
   if (window.fetched) {
     summary.pairsFetched++;
     summary.candlesFetched += window.fetchedCount;
+  } else if (window.candles.length > 0) {
+    summary.pairsServedFromStore++;
   }
   if (!window.complete) summary.stalePairs++;
   const { candles } = window;

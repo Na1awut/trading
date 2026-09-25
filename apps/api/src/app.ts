@@ -20,6 +20,7 @@ import { registerErrorHandler } from './plugins/errors';
 import { assetRoutes } from './routes/assets';
 import { deviceRoutes } from './routes/devices';
 import { healthRoutes } from './routes/health';
+import { metricsRoutes } from './routes/metrics';
 import { meRoutes } from './routes/me';
 import { signalEventRoutes } from './routes/signal-events';
 import { signalRoutes } from './routes/signals';
@@ -51,6 +52,18 @@ export async function buildApp(deps: AppDeps, opts: { logger?: FastifyBaseLogger
   app.addHook('onSend', async (request, reply) => {
     void reply.header('x-request-id', request.id);
   });
+  if (deps.metrics) {
+    const m = deps.metrics;
+    app.addHook('onResponse', async (request, reply) => {
+      m.inc('http_requests_total', {
+        route: request.routeOptions.url ?? 'unmatched',
+        status: `${Math.floor(reply.statusCode / 100)}xx`,
+      });
+      m.observe('http_request_duration_ms', reply.elapsedTime, {
+        route: request.routeOptions.url ?? 'unmatched',
+      });
+    });
+  }
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -99,6 +112,7 @@ export async function buildApp(deps: AppDeps, opts: { logger?: FastifyBaseLogger
   }
 
   await app.register(healthRoutes, deps);
+  await app.register(metricsRoutes, deps);
 
   // Everything below requires authentication.
   const authenticate = createAuthenticateHook(deps.authVerifier, deps.prisma);

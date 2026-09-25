@@ -1,4 +1,5 @@
 import { createServer, type Server } from 'node:http';
+import type { Metrics } from '@signals/config';
 
 /** Liveness state shared between the scheduler and the optional health endpoint. */
 export class WorkerHealth {
@@ -37,10 +38,24 @@ export class WorkerHealth {
   }
 }
 
-/** Minimal GET /health server for container liveness probes. */
-export function startHealthServer(health: WorkerHealth, port: number): Server {
+/**
+ * Internal (not internet-facing) port: GET /health for liveness probes and GET /metrics
+ * (JSON, or Prometheus text with ?format=prometheus).
+ */
+export function startHealthServer(health: WorkerHealth, port: number, metrics?: Metrics): Server {
   const server = createServer((req, res) => {
-    if (req.method !== 'GET' || req.url !== '/health') {
+    const url = new URL(req.url ?? '/', 'http://localhost');
+    if (req.method === 'GET' && url.pathname === '/metrics' && metrics) {
+      if (url.searchParams.get('format') === 'prometheus') {
+        res.writeHead(200, { 'content-type': 'text/plain; version=0.0.4' });
+        res.end(metrics.prometheus());
+      } else {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(metrics.snapshot()));
+      }
+      return;
+    }
+    if (req.method !== 'GET' || url.pathname !== '/health') {
       res.writeHead(404).end();
       return;
     }

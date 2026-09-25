@@ -15,6 +15,8 @@ export interface CachedProviderOptions {
   /** Upper bound for candle TTL (e.g. to pick up vendor corrections on daily bars). */
   maxCandleTtlMs?: number;
   now?: () => number;
+  /** Called for every lookup (metrics). kind = quote | candles | search | asset. */
+  onCacheResult?: (kind: string, hit: boolean) => void;
 }
 
 /**
@@ -28,14 +30,16 @@ export interface CachedProviderOptions {
 export class CachedMarketDataProvider implements MarketDataProvider {
   private readonly cache: MarketDataCache;
   private readonly inflight = new Map<string, Promise<unknown>>();
-  private readonly o: Required<Omit<CachedProviderOptions, 'cache'>>;
+  private readonly o: Required<Omit<CachedProviderOptions, 'cache' | 'onCacheResult'>>;
+  private readonly onCacheResult?: (kind: string, hit: boolean) => void;
 
   constructor(
     private readonly inner: MarketDataProvider,
     options: CachedProviderOptions = {},
   ) {
     this.cache = options.cache ?? new InMemoryMarketDataCache(5_000, options.now);
-    const { cache: _cache, ...rest } = options;
+    const { cache: _cache, onCacheResult, ...rest } = options;
+    this.onCacheResult = onCacheResult;
     this.o = withDefaults(
       {
         quoteTtlMs: 10_000,
@@ -95,7 +99,9 @@ export class CachedMarketDataProvider implements MarketDataProvider {
 
   private async memo<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
     const fullKey = `md:${this.inner.name}:${key}`;
+    const kind = key.slice(0, key.indexOf(':'));
     const hit = await this.cache.get<T>(fullKey);
+    this.onCacheResult?.(kind, hit !== undefined);
     if (hit !== undefined) return hit;
     const pending = this.inflight.get(fullKey) as Promise<T> | undefined;
     if (pending) return pending;

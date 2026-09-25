@@ -6,6 +6,7 @@ import {
   type SendResult,
 } from '@signals/notifications';
 import { getRule } from '@signals/signal-engine';
+import type { Metrics } from '@signals/config';
 import type { WorkerLogger } from '../evaluation-cycle';
 import { evaluatePreferences } from './preferences';
 import { DEFAULT_DELIVERY_SETTINGS, retryDelayMs, type DeliverySettings } from './settings';
@@ -15,6 +16,7 @@ export interface DeliveryDeps {
   notifier: NotificationSender;
   logger: WorkerLogger;
   delivery?: Partial<DeliverySettings>;
+  metrics?: Metrics;
 }
 
 export type DeliveryOutcome =
@@ -59,6 +61,23 @@ export async function deliverEvent(
   deps: DeliveryDeps,
   eventId: string,
   nowMs = Date.now(),
+): Promise<DeliveryOutcome> {
+  const outcome = await deliverEventInner(deps, eventId, nowMs);
+  const m = deps.metrics;
+  if (m && outcome !== 'NOT_DUE' && outcome !== 'NOT_CLAIMED') {
+    m.inc('notification_deliveries_total', { outcome });
+    if (outcome === 'SENT') m.inc('notifications_sent_total');
+    if (outcome === 'RETRY_SCHEDULED') m.inc('notification_failures_total', { permanent: false });
+    if (outcome === 'FAILED' || outcome === 'EXPIRED')
+      m.inc('notification_failures_total', { permanent: true });
+  }
+  return outcome;
+}
+
+async function deliverEventInner(
+  deps: DeliveryDeps,
+  eventId: string,
+  nowMs: number,
 ): Promise<DeliveryOutcome> {
   const s = { ...DEFAULT_DELIVERY_SETTINGS, ...deps.delivery };
   const now = new Date(nowMs);
@@ -122,6 +141,7 @@ export async function deliverEvent(
     },
   });
   if (claim.count !== 1) return 'NOT_CLAIMED';
+  if (attempt > 1) deps.metrics?.inc('notification_retries_total');
   const mine = {
     id: event.id,
     notificationAttempts: attempt,
@@ -232,6 +252,21 @@ export async function deliverEvent(
     'notification failed - retry scheduled',
   );
   return 'RETRY_SCHEDULED';
+}
+
+/** Notifications still owed: due or scheduled PENDING/FAILED plus in-flight SENDING. */
+export async function countPendingNotifications(prisma: PrismaClient): Promise<number> {
+  return prisma.signalEvent.count({
+    where: {
+      OR: [
+        {
+          notificationStatus: { in: ['PENDING', 'FAILED'] },
+          nextNotificationAttemptAt: { not: null },
+        },
+        { notificationStatus: 'SENDING' },
+      ],
+    },
+  });
 }
 
 export interface SweepSummary {

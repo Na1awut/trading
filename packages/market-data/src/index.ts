@@ -57,3 +57,4 @@ export function createMarketDataProvider(config: MarketDataConfig): MarketDataPr
 }
 export * from './audit';
 export type { SessionMode } from './vendors/types';
+export * from './metrics';

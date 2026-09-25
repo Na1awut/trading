@@ -106,3 +106,28 @@ describe('parseConfig', () => {
     );
   });
 });
+
+describe('Metrics', () => {
+  it('counts, gauges and summarises timings; renders JSON and Prometheus text', async () => {
+    const { Metrics } = await import('../src');
+    const m = new Metrics();
+    m.inc('market_data_requests_total', { vendor: 'twelvedata', ok: true });
+    m.inc('market_data_requests_total', { ok: true, vendor: 'twelvedata' }); // label order irrelevant
+    m.inc('market_data_requests_total', { vendor: 'twelvedata', ok: false });
+    m.set('notifications_pending', 4);
+    m.observe('worker_cycle_duration_ms', 100);
+    m.observe('worker_cycle_duration_ms', 300);
+    expect(m.counter('market_data_requests_total', { vendor: 'twelvedata', ok: true })).toBe(2);
+    expect(m.total('market_data_requests_total')).toBe(3);
+    expect(m.snapshot().timings['worker_cycle_duration_ms']).toEqual({
+      count: 2,
+      sum: 400,
+      max: 300,
+      avg: 200,
+    });
+    const text = m.prometheus();
+    expect(text).toContain('signals_market_data_requests_total{ok="true",vendor="twelvedata"} 2');
+    expect(text).toContain('signals_notifications_pending 4');
+    expect(text).toContain('signals_worker_cycle_duration_ms_count 2');
+  });
+});

@@ -115,6 +115,10 @@ const EnvSchema = z
     CANDLE_RETENTION_DAYS_1H: days(730),
     CANDLE_RETENTION_DAYS_1D: days(0),
     RETENTION_INTERVAL_MS: ms(3_600_000, 60_000),
+    /** Enables the API's GET /metrics, which then requires `Authorization: Bearer <token>`. */
+    METRICS_TOKEN: z.string().min(16, 'METRICS_TOKEN must be at least 16 characters').optional(),
+    /** Worker logs a metrics snapshot this often (0 = never). */
+    METRICS_LOG_INTERVAL_MS: ms(300_000),
     /** Optional worker liveness endpoint (GET /health); 0 = disabled. */
     WORKER_HEALTH_PORT: z.coerce.number().int().min(0).max(65535).default(0),
   })
@@ -309,3 +313,5 @@ export function minRetentionDays(
   const perCalendarDay = (perTradingDay * 5) / 7;
   return Math.max(4, Math.ceil((lookback / perCalendarDay) * 1.2));
 }
+
+export * from './metrics';
