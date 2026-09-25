@@ -1,22 +1,47 @@
 import { Redirect } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { API_URL } from '../src/api/client';
 import { useAuth } from '../src/auth/AuthContext';
+import { GoogleSignInButton, googleSignInConfigured } from '../src/auth/GoogleSignInButton';
 import { Button, Disclaimer } from '../src/components/ui';
 import { colors, spacing } from '../src/theme';
 
 export default function LoginScreen() {
-  const { status, mode, signIn, signUp } = useAuth();
+  const { status, mode, signIn, signUp, resetPassword } = useAuth();
   const [email, setEmail] = useState(mode === 'dev' ? 'demo@example.com' : '');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   if (status === 'signedIn') return <Redirect href="/" />;
 
+  const forgot = async () => {
+    setError(null);
+    setInfo(null);
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setError('Enter your email address first');
+    try {
+      await resetPassword(email);
+      setInfo('Password reset email sent.');
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message.replace('Firebase: ', '') : 'Could not send reset email',
+      );
+    }
+  };
+
   const submit = async (action: 'in' | 'up') => {
     setError(null);
+    setInfo(null);
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setError('Enter a valid email address');
     if (mode === 'firebase' && password.length < 6)
       return setError('Password must be at least 6 characters');
@@ -61,8 +86,10 @@ export default function LoginScreen() {
           />
         ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
+        {info ? <Text style={styles.info}>{info}</Text> : null}
 
         <Button title="Sign in" onPress={() => void submit('in')} loading={busy} />
+        {googleSignInConfigured ? <GoogleSignInButton /> : null}
         {mode === 'firebase' ? (
           <Button
             title="Create account"
@@ -70,6 +97,11 @@ export default function LoginScreen() {
             onPress={() => void submit('up')}
             disabled={busy}
           />
+        ) : null}
+        {mode === 'firebase' ? (
+          <Pressable onPress={() => void forgot()} accessibilityRole="button">
+            <Text style={styles.link}>Forgot password?</Text>
+          </Pressable>
         ) : (
           <Text style={styles.devNote}>
             Dev login (no Firebase configured): any email works with an API running AUTH_MODE=dev.
@@ -99,5 +131,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   error: { color: colors.negative },
+  info: { color: colors.positive },
+  link: { color: colors.textMuted, textAlign: 'center', paddingVertical: spacing.sm },
   devNote: { color: colors.textFaint, fontSize: 12, lineHeight: 18, textAlign: 'center' },
 });

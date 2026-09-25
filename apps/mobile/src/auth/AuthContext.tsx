@@ -1,7 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  GoogleAuthProvider,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  signInWithCredential,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
@@ -11,6 +15,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -22,10 +27,16 @@ type Status = 'loading' | 'signedOut' | 'signedIn';
 interface AuthContextValue {
   status: Status;
   email: string | null;
+  emailVerified: boolean;
   mode: 'firebase' | 'dev';
   signIn(email: string, password: string): Promise<void>;
   signUp(email: string, password: string): Promise<void>;
+  /** Google (or any OAuth) sign-in: exchange the provider ID token for a Firebase session. */
+  signInWithGoogleIdToken(idToken: string): Promise<void>;
+  resetPassword(email: string): Promise<void>;
   signOut(): Promise<void>;
+  /** Runs before sign-out (e.g. unregister this device's push token). */
+  setBeforeSignOut(fn: (() => Promise<void>) | null): void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -34,18 +45,22 @@ const DEV_EMAIL_KEY = 'dev-auth-email';
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
   const [email, setEmail] = useState<string | null>(null);
+  const [emailVerified, setEmailVerified] = useState(false);
+  const beforeSignOut = useRef<(() => Promise<void>) | null>(null);
   const mode = firebaseConfigured ? 'firebase' : 'dev';
 
   useEffect(() => {
     if (firebaseConfigured) {
       return onAuthStateChanged(getFirebaseAuth(), (user) => {
         setEmail(user?.email ?? null);
+        setEmailVerified(user?.emailVerified ?? false);
         setStatus(user ? 'signedIn' : 'signedOut');
       });
     }
     AsyncStorage.getItem(DEV_EMAIL_KEY)
       .then((stored) => {
         setEmail(stored);
+        setEmailVerified(true);
         setStatus(stored ? 'signedIn' : 'signedOut');
       })
       .catch(() => setStatus('signedOut'));
@@ -53,6 +68,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    try {
+      await beforeSignOut.current?.();
+    } catch {
+      // best effort - never block sign-out
+    }
     if (firebaseConfigured) await firebaseSignOut(getFirebaseAuth());
     else await AsyncStorage.removeItem(DEV_EMAIL_KEY);
     setEmail(null);
@@ -61,8 +81,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     configureApiAuth(
-      async () => {
-        if (firebaseConfigured) return (await getFirebaseAuth().currentUser?.getIdToken()) ?? null;
+      async (forceRefresh) => {
+        // Firebase caches the ID token and refreshes it before expiry; forceRefresh is used
+        // once after a 401 (e.g. clock skew or a just-verified email).
+        if (firebaseConfigured) {
+          return (await getFirebaseAuth().currentUser?.getIdToken(forceRefresh)) ?? null;
+        }
         return email ? `dev:${email}` : null;
       },
       () => {
@@ -80,13 +104,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Dev mode: no password check - the API must run with AUTH_MODE=dev.
     await AsyncStorage.setItem(DEV_EMAIL_KEY, e);
     setEmail(e);
+    setEmailVerified(true);
     setStatus('signedIn');
   }, []);
 
   const signUp = useCallback(
     async (rawEmail: string, password: string) => {
       if (firebaseConfigured) {
-        await createUserWithEmailAndPassword(getFirebaseAuth(), rawEmail.trim(), password);
+        const cred = await createUserWithEmailAndPassword(
+          getFirebaseAuth(),
+          rawEmail.trim(),
+          password,
+        );
+        // Needed when the API runs with AUTH_REQUIRE_EMAIL_VERIFIED=true.
+        await sendEmailVerification(cred.user).catch(() => undefined);
         return;
       }
       await signIn(rawEmail, password);
@@ -94,9 +125,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [signIn],
   );
 
+  const signInWithGoogleIdToken = useCallback(async (idToken: string) => {
+    if (!firebaseConfigured) throw new Error('Google sign-in requires Firebase configuration');
+    await signInWithCredential(getFirebaseAuth(), GoogleAuthProvider.credential(idToken));
+  }, []);
+
+  const resetPassword = useCallback(async (rawEmail: string) => {
+    if (!firebaseConfigured) throw new Error('Password reset requires Firebase configuration');
+    await sendPasswordResetEmail(getFirebaseAuth(), rawEmail.trim());
+  }, []);
+
+  const setBeforeSignOut = useCallback((fn: (() => Promise<void>) | null) => {
+    beforeSignOut.current = fn;
+  }, []);
+
   const value = useMemo(
-    () => ({ status, email, mode, signIn, signUp, signOut }) as AuthContextValue,
-    [status, email, mode, signIn, signUp, signOut],
+    () =>
+      ({
+        status,
+        email,
+        emailVerified,
+        mode,
+        signIn,
+        signUp,
+        signInWithGoogleIdToken,
+        resetPassword,
+        signOut,
+        setBeforeSignOut,
+      }) as AuthContextValue,
+    [
+      status,
+      email,
+      emailVerified,
+      mode,
+      signIn,
+      signUp,
+      signInWithGoogleIdToken,
+      resetPassword,
+      signOut,
+      setBeforeSignOut,
+    ],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

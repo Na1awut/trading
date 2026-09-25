@@ -27,23 +27,26 @@ export class ApiError extends Error {
   }
 }
 
-let tokenProvider: () => Promise<string | null> = async () => null;
+let tokenProvider: (forceRefresh?: boolean) => Promise<string | null> = async () => null;
 let onUnauthorized: () => void = () => {};
 
 /** Wired up by AuthProvider. */
-export function configureApiAuth(getToken: () => Promise<string | null>, unauthorized: () => void) {
+export function configureApiAuth(
+  getToken: (forceRefresh?: boolean) => Promise<string | null>,
+  unauthorized: () => void,
+) {
   tokenProvider = getToken;
   onUnauthorized = unauthorized;
 }
 
-async function request<T>(
+async function send(
   path: string,
-  init: { method?: string; body?: unknown } = {},
-): Promise<T> {
-  const token = await tokenProvider();
-  let res: Response;
+  init: { method?: string; body?: unknown },
+  forceRefresh: boolean,
+) {
+  const token = await tokenProvider(forceRefresh);
   try {
-    res = await fetch(`${API_URL}${path}`, {
+    return await fetch(`${API_URL}${path}`, {
       method: init.method ?? 'GET',
       headers: {
         Accept: 'application/json',
@@ -55,6 +58,15 @@ async function request<T>(
   } catch {
     throw new ApiError(0, `Cannot reach the server at ${API_URL}`);
   }
+}
+
+async function request<T>(
+  path: string,
+  init: { method?: string; body?: unknown } = {},
+): Promise<T> {
+  let res = await send(path, init, false);
+  // One retry with a force-refreshed ID token before treating the session as dead.
+  if (res.status === 401) res = await send(path, init, true);
   if (res.status === 401) onUnauthorized();
   if (res.status === 204) return undefined as T;
   const json = (await res.json().catch(() => ({}))) as { message?: string };

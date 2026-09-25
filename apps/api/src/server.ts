@@ -2,6 +2,7 @@ import { loadConfig } from '@signals/config';
 import { createPrismaClient } from '@signals/db';
 import { CachedMarketDataProvider, createMarketDataProvider } from '@signals/market-data';
 import { createNotificationSender, getFirebaseAdminApp } from '@signals/notifications';
+import { getAuth } from 'firebase-admin/auth';
 import { pino } from 'pino';
 import { buildApp } from './app';
 import { DevAuthVerifier, FirebaseAuthVerifier } from './plugins/auth';
@@ -35,7 +36,10 @@ async function main() {
   );
   const authVerifier =
     config.AUTH_MODE === 'firebase'
-      ? new FirebaseAuthVerifier(getFirebaseAdminApp(firebase))
+      ? new FirebaseAuthVerifier(getAuth(getFirebaseAdminApp(firebase)), {
+          requireEmailVerified: config.AUTH_REQUIRE_EMAIL_VERIFIED,
+          checkRevoked: config.AUTH_CHECK_REVOKED,
+        })
       : new DevAuthVerifier();
 
   const app = await buildApp(

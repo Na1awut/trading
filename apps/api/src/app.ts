@@ -26,6 +26,10 @@ import { watchlistRoutes } from './routes/watchlist';
 
 export async function buildApp(deps: AppDeps, opts: { logger?: FastifyBaseLogger | false } = {}) {
   const { config } = deps;
+  // Defence in depth: config validation already rejects AUTH_MODE=dev in production.
+  if (config.NODE_ENV === 'production' && deps.authVerifier.mode !== 'firebase') {
+    throw new Error('Refusing to start: dev authentication is not allowed in production');
+  }
   const logger: FastifyBaseLogger =
     opts.logger || pino({ level: opts.logger === false ? 'silent' : config.LOG_LEVEL });
   const app = Fastify({
