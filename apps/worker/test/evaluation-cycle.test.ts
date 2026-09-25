@@ -102,6 +102,11 @@ describe('vertical slice: add NVDA -> EMA 9/21 bullish cross -> event -> notific
     });
     expect(evidence.previous.ema9!).toBeLessThanOrEqual(evidence.previous.ema21!);
     expect(evidence.current.ema9!).toBeGreaterThan(evidence.current.ema21!);
+    // Informational strength, stored as columns for filtering and in evidence for explanation.
+    expect(event!.signalStrength).toMatch(/^(LOW|MEDIUM|HIGH)$/);
+    expect(event!.signalScore).toBe(evidence.strength!.score);
+    expect(event!.maxSignalScore).toBe(evidence.strength!.maxScore);
+    expect(evidence.strength!.components[0]).toMatchObject({ name: 'trigger', met: true });
 
     expect(notifier.sent).toHaveLength(1);
     expect(notifier.sent[0]!.message).toEqual({

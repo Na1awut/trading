@@ -3,6 +3,7 @@ import { loadConfig } from '@signals/config';
 import { createPrismaClient } from '@signals/db';
 import { createMarketDataProvider } from '@signals/market-data';
 import { createNotificationSender } from '@signals/notifications';
+import { strengthModelFromList } from '@signals/signal-engine';
 import { createWorkerRuntime, runEvaluationCycle, type WorkerSettings } from './evaluation-cycle';
 import { runNotificationSweep } from './notifications/delivery';
 import type { DeliverySettings } from './notifications/settings';
@@ -32,6 +33,7 @@ async function main() {
     incompleteRefetchMs: config.SIGNAL_INCOMPLETE_REFETCH_MS,
     shardIndex: config.WORKER_SHARD_INDEX,
     shardCount: config.WORKER_SHARD_COUNT,
+    strengthModel: strengthModelFromList(config.SIGNAL_STRENGTH_CONFIRMATIONS),
   };
   const runtime = createWorkerRuntime(settings);
   const delivery: DeliverySettings = {

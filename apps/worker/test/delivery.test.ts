@@ -1,5 +1,11 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { addToWatchlist, createPrismaClient, findOrCreateUser, updateSettings } from '@signals/db';
+import {
+  addToWatchlist,
+  createPrismaClient,
+  findOrCreateUser,
+  listSignalEvents,
+  updateSettings,
+} from '@signals/db';
 import { resetDatabase, testDatabaseUrl } from '@signals/db/testing';
 import { MOCK_ASSETS } from '@signals/market-data';
 import { RecordingNotificationSender } from '@signals/notifications';
@@ -270,5 +276,85 @@ describe('preferences are checked at send time', () => {
       notificationStatus: 'SUPPRESSED',
       notificationError: 'alerts disabled globally',
     });
+  });
+});
+
+describe('quiet hours (delay, never discard)', () => {
+  const late = Date.parse('2026-09-25T16:30:00Z'); // 23:30 in Bangkok, 12:30 in New York
+
+  it('defers the push until quiet hours end; the event is in history immediately', async () => {
+    const { event, user } = await setup({
+      event: { triggeredAt: new Date(late), nextNotificationAttemptAt: new Date(late) },
+    });
+    await updateSettings(prisma, user.id, {
+      quietHoursStart: '22:00',
+      quietHoursEnd: '07:00',
+      timezone: 'Asia/Bangkok',
+    });
+
+    expect(await deliverEvent(deps(), event.id, late)).toBe('DEFERRED');
+    const e = await reload(event.id);
+    expect(e).toMatchObject({ notificationStatus: 'PENDING', notificationAttempts: 0 });
+    expect(e.nextNotificationAttemptAt!.toISOString()).toBe('2026-09-26T00:00:00.000Z'); // 07:00 Bangkok
+    expect(e.notificationError).toMatch(/quiet hours/);
+    expect(await listSignalEvents(prisma, user.id)).toHaveLength(1); // visible in history now
+    expect(notifier.sent).toHaveLength(0);
+
+    expect(
+      (await runNotificationSweep(deps(), Date.parse('2026-09-25T23:59:00Z'))).candidates,
+    ).toBe(0);
+    expect(
+      (await runNotificationSweep(deps(), Date.parse('2026-09-26T00:00:00Z'))).outcomes,
+    ).toEqual({ SENT: 1 });
+    expect(await reload(event.id)).toMatchObject({
+      notificationStatus: 'SENT',
+      notificationAttempts: 1,
+    });
+  });
+
+  it("uses the user's timezone: the same instant is outside quiet hours in New York", async () => {
+    const { event, user } = await setup({
+      event: { triggeredAt: new Date(late), nextNotificationAttemptAt: new Date(late) },
+    });
+    await updateSettings(prisma, user.id, {
+      quietHoursStart: '22:00',
+      quietHoursEnd: '07:00',
+      timezone: 'America/New_York',
+    });
+    expect(await deliverEvent(deps(), event.id, late)).toBe('SENT');
+  });
+});
+
+describe('minimum strength and per-signal switches', () => {
+  it('suppresses notifications below the minimum strength but keeps the event', async () => {
+    const { event, user } = await setup({
+      event: { signalStrength: 'MEDIUM', signalScore: 2, maxSignalScore: 5 },
+    });
+    await updateSettings(prisma, user.id, { minimumSignalStrength: 'HIGH' });
+    expect(await deliverEvent(deps(), event.id, T0)).toBe('SUPPRESSED');
+    expect(await reload(event.id)).toMatchObject({
+      notificationStatus: 'SUPPRESSED',
+      notificationError: 'below minimum strength (MEDIUM < HIGH)',
+    });
+  });
+
+  it('sends when strength meets the minimum, and for legacy events without a strength', async () => {
+    const a = await setup({ event: { signalStrength: 'HIGH' } });
+    await updateSettings(prisma, a.user.id, { minimumSignalStrength: 'MEDIUM' });
+    expect(await deliverEvent(deps(), a.event.id, T0)).toBe('SENT');
+    await resetDatabase(prisma);
+    const b = await setup({ event: { signalStrength: null } });
+    await updateSettings(prisma, b.user.id, { minimumSignalStrength: 'HIGH' });
+    expect(await deliverEvent(deps(), b.event.id, T0)).toBe('SENT');
+  });
+
+  it('suppresses when the signal was switched off after the event was recorded', async () => {
+    const { event, user } = await setup();
+    await prisma.signalSubscription.updateMany({
+      where: { userId: user.id },
+      data: { enabled: false },
+    });
+    expect(await deliverEvent(deps(), event.id, T0)).toBe('SUPPRESSED');
+    expect((await reload(event.id)).notificationError).toBe('signal disabled');
   });
 });

@@ -3,10 +3,12 @@ import type { PrismaClient, SignalDefinition, SignalState } from '@signals/db';
 import type { MarketDataProvider } from '@signals/market-data';
 import type { Logger, NotificationSender } from '@signals/notifications';
 import {
+  DEFAULT_STRENGTH_MODEL,
   createSignalContext,
   evaluateSignal,
   parseSignalParameters,
   type SignalEvaluation,
+  type StrengthModel,
 } from '@signals/signal-engine';
 import { latestClosedCandleOpenTime, type Timeframe } from '@signals/types';
 import { loadCandleWindow } from './candle-source';
@@ -24,6 +26,7 @@ export interface WorkerSettings {
   /** Horizontal scaling without a queue: this instance handles pairs where hash % count == index. */
   shardIndex: number;
   shardCount: number;
+  strengthModel: StrengthModel;
 }
 
 export const DEFAULT_WORKER_SETTINGS: WorkerSettings = {
@@ -34,6 +37,7 @@ export const DEFAULT_WORKER_SETTINGS: WorkerSettings = {
   incompleteRefetchMs: 60_000,
   shardIndex: 0,
   shardCount: 1,
+  strengthModel: DEFAULT_STRENGTH_MODEL,
 };
 
 export interface CycleDeps {
@@ -305,6 +309,7 @@ async function evaluatePair(
         index,
         previousActive,
         currency: def.asset.currency,
+        strengthModel: settings.strengthModel,
       });
       summary.evaluated++;
       result.candlesEvaluated++;

@@ -10,6 +10,7 @@ import type {
 } from '@signals/types';
 import { isCandleComplete } from '@signals/types';
 import { isSignalContext, type SignalContext } from './context';
+import { scoreSignal, type StrengthModel } from './strength';
 import { IndicatorContext } from './indicators/context';
 import { getRule } from './rules';
 import { at } from './rules/types';
@@ -59,6 +60,8 @@ export interface EvaluateSignalInput {
    */
   previousActive?: boolean | null;
   currency?: string;
+  /** Strength model used when the signal triggers (default: all confirmations). */
+  strengthModel?: StrengthModel;
 }
 
 export interface SignalEvaluation {
@@ -134,6 +137,10 @@ export function evaluateSignal(input: EvaluateSignalInput): SignalEvaluation {
     candle: evidenceCandle(candle),
     previousCandle: previousCandle ? evidenceCandle(previousCandle) : null,
     context: roundValues(standard),
+    // Scored only when it fires - that is when it is stored and shown.
+    ...(triggered
+      ? { strength: scoreSignal(input.signalType, ctx, last, input.strengthModel) }
+      : {}),
   };
 
   return {

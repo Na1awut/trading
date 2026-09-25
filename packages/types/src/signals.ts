@@ -54,6 +54,37 @@ export const SignalParametersSchema = z.record(z.string(), z.number().finite());
 export type SignalValues = Record<string, number | null>;
 export const SignalValuesSchema = z.record(z.string(), z.number().nullable());
 
+/**
+ * Informational signal strength: how many configured technical conditions agree with the
+ * signal's direction at the trigger candle. NOT expected return, probability, or a
+ * recommendation - never displayed as "strong buy/sell".
+ */
+export const SIGNAL_STRENGTHS = ['LOW', 'MEDIUM', 'HIGH'] as const;
+export const SignalStrengthSchema = z.enum(SIGNAL_STRENGTHS);
+export type SignalStrength = z.infer<typeof SignalStrengthSchema>;
+
+export function strengthRank(s: SignalStrength): number {
+  return SIGNAL_STRENGTHS.indexOf(s);
+}
+
+export const StrengthComponentSchema = z.object({
+  /** e.g. "trigger", "volume", "rsi", "trend", "macd" */
+  name: z.string(),
+  met: z.boolean(),
+  /** Plain-language description, e.g. "Volume 1.8x the 20-period average (>= 1.5x)". */
+  detail: z.string(),
+});
+
+export const SignalStrengthBreakdownSchema = z.object({
+  score: z.number().int(),
+  maxScore: z.number().int(),
+  level: SignalStrengthSchema,
+  /** Movement the condition describes (not a recommendation). */
+  direction: z.enum(['up', 'down', 'none']),
+  components: z.array(StrengthComponentSchema),
+});
+export type SignalStrengthBreakdown = z.infer<typeof SignalStrengthBreakdownSchema>;
+
 /** OHLCV snapshot of the candle a signal was evaluated on (UTC ISO timestamp). */
 export const EvidenceCandleSchema = z.object({
   timestamp: z.string(),
@@ -83,5 +114,7 @@ export const SignalEvidenceSchema = z.object({
   previousCandle: EvidenceCandleSchema.nullable(),
   /** Standard context at the current candle: RSI 14, volume vs 20-period average, etc. */
   context: SignalValuesSchema,
+  /** Technical-condition agreement at the trigger candle (see SignalStrength). */
+  strength: SignalStrengthBreakdownSchema.optional(),
 });
 export type SignalEvidence = z.infer<typeof SignalEvidenceSchema>;

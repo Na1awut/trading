@@ -1,4 +1,4 @@
-import type { Prisma} from '@signals/db';
+import type { Prisma } from '@signals/db';
 import { type PrismaClient } from '@signals/db';
 import {
   buildSignalNotification,

@@ -454,6 +454,30 @@ describe('devices & settings', () => {
       quietHoursStart: '22:00',
       timezone: 'Asia/Bangkok',
     });
+    const strength = await app.inject({
+      method: 'PATCH',
+      url: '/me/settings',
+      headers: auth(),
+      payload: { minimumSignalStrength: 'HIGH', quietHoursEnd: '07:00' },
+    });
+    expect(strength.json()).toMatchObject({
+      minimumSignalStrength: 'HIGH',
+      quietHoursStart: '22:00',
+      quietHoursEnd: '07:00',
+    });
+    for (const payload of [
+      { timezone: 'Mars/Olympus' },
+      { minimumSignalStrength: 50 },
+      { quietHoursEnd: '24:00' },
+    ]) {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/me/settings',
+        headers: auth(),
+        payload,
+      });
+      expect(res.statusCode).toBe(400);
+    }
     const bad = await app.inject({
       method: 'PATCH',
       url: '/me/settings',

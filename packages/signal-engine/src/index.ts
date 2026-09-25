@@ -3,3 +3,4 @@ export * from './rules';
 export * from './evaluate';
 export * from './format';
 export * from './context';
+export * from './strength';

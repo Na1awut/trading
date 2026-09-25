@@ -65,6 +65,13 @@ enum NotificationStatus {
   NO_DEVICES
 }
 
+/// Informational: how many configured technical conditions agree (not a recommendation).
+enum SignalStrength {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 enum NotificationFrequency {
   REALTIME
   HOURLY_DIGEST
@@ -98,7 +105,8 @@ model NotificationSettings {
   quietHoursEnd         String? // "07:00"
   timezone              String                @default("UTC")
   notificationFrequency NotificationFrequency @default(REALTIME)
-  minimumSignalStrength Int                   @default(0)
+  /// Notifications below this strength are recorded but not pushed.
+  minimumSignalStrength SignalStrength        @default(LOW)
   updatedAt             DateTime              @updatedAt
 }
 
@@ -233,6 +241,10 @@ model SignalEvent {
   /// Structured evidence (SignalEvidence v1): previous/current rule values, candle, params.
   /// Null only for events created before Phase 2.
   evidence           Json?
+  /// Technical-condition agreement at trigger time (null for pre-Phase-2 events).
+  signalScore        Int?
+  maxSignalScore     Int?
+  signalStrength     SignalStrength?
   message            String
   notificationStatus        NotificationStatus @default(PENDING)
   notificationAttempts      Int                @default(0)

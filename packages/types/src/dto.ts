@@ -8,6 +8,7 @@ import {
   TimeframeSchema,
 } from './market';
 import {
+  SignalStrengthSchema,
   SignalEvidenceSchema,
   SignalCategorySchema,
   SignalParametersSchema,
@@ -78,6 +79,10 @@ export const SignalEventSchema = z.object({
   /** Structured explanation; null for events recorded before evidence existed. */
   evidence: SignalEvidenceSchema.nullable(),
   message: z.string(),
+  /** Technical-condition agreement (informational, not a recommendation). */
+  signalScore: z.number().int().nullable(),
+  maxSignalScore: z.number().int().nullable(),
+  signalStrength: SignalStrengthSchema.nullable(),
   notificationStatus: z.enum(['PENDING', 'SENDING', 'SENT', 'FAILED', 'SUPPRESSED', 'NO_DEVICES']),
   notificationSentAt: z.string().nullable(),
   /** Set while a push is deferred (quiet hours) or waiting for a retry. */
@@ -169,22 +174,30 @@ export type RegisterDeviceBody = z.infer<typeof RegisterDeviceBodySchema>;
 
 /* --------------------------- Notifications --------------------------- */
 
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function isValidTimeZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const NotificationSettingsSchema = z.object({
   alertsEnabled: z.boolean(),
   /** Categories the user has switched off entirely (e.g. ['VOLUME']). */
   disabledCategories: z.array(SignalCategorySchema),
-  // Future-compatible fields: stored and returned but not yet enforced by the worker.
-  quietHoursStart: z
-    .string()
-    .regex(/^\d{2}:\d{2}$/)
-    .nullable(),
-  quietHoursEnd: z
-    .string()
-    .regex(/^\d{2}:\d{2}$/)
-    .nullable(),
-  timezone: z.string().min(1).max(64),
+  /** Quiet hours in `timezone` ("22:00" -> "07:00" spans midnight). Null or equal = off. */
+  quietHoursStart: z.string().regex(HHMM, 'Use HH:mm (00:00-23:59)').nullable(),
+  quietHoursEnd: z.string().regex(HHMM, 'Use HH:mm (00:00-23:59)').nullable(),
+  /** IANA timezone, e.g. "Asia/Bangkok". */
+  timezone: z.string().min(1).max(64).refine(isValidTimeZone, 'Unknown IANA timezone'),
+  /** Stored; digest delivery is not implemented yet (all notifications are real-time). */
   notificationFrequency: z.enum(['REALTIME', 'HOURLY_DIGEST', 'DAILY_DIGEST']),
-  minimumSignalStrength: z.number().int().min(0).max(100),
+  /** Notifications below this strength are recorded in history but not pushed. */
+  minimumSignalStrength: SignalStrengthSchema,
 });
 export type NotificationSettings = z.infer<typeof NotificationSettingsSchema>;
 
