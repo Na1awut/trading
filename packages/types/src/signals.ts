@@ -53,3 +53,35 @@ export const SignalParametersSchema = z.record(z.string(), z.number().finite());
 /** Indicator/context values recorded with an event so the UI can explain it. */
 export type SignalValues = Record<string, number | null>;
 export const SignalValuesSchema = z.record(z.string(), z.number().nullable());
+
+/** OHLCV snapshot of the candle a signal was evaluated on (UTC ISO timestamp). */
+export const EvidenceCandleSchema = z.object({
+  timestamp: z.string(),
+  open: z.number(),
+  high: z.number(),
+  low: z.number(),
+  close: z.number(),
+  volume: z.number(),
+});
+
+/**
+ * Structured proof of WHY a signal fired: the rule's values on the previous and current
+ * completed candle (the false -> true transition), the triggering candle, parameters, and
+ * context. Stored with every SignalEvent; UIs build explanations from it.
+ */
+export const SignalEvidenceSchema = z.object({
+  version: z.literal(1),
+  type: SignalTypeSchema,
+  symbol: z.string().nullable(),
+  timeframe: z.string().nullable(),
+  parameters: SignalParametersSchema,
+  /** Condition value on the previous and current candle (always false -> true for events). */
+  condition: z.object({ previous: z.boolean().nullable(), current: z.boolean().nullable() }),
+  previous: SignalValuesSchema,
+  current: SignalValuesSchema,
+  candle: EvidenceCandleSchema,
+  previousCandle: EvidenceCandleSchema.nullable(),
+  /** Standard context at the current candle: RSI 14, volume vs 20-period average, etc. */
+  context: SignalValuesSchema,
+});
+export type SignalEvidence = z.infer<typeof SignalEvidenceSchema>;

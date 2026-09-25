@@ -14,7 +14,7 @@ import {
   ScriptedMarketDataProvider,
 } from '@signals/market-data';
 import { RecordingNotificationSender } from '@signals/notifications';
-import { timeframeToMs, type Candle } from '@signals/types';
+import { SignalEvidenceSchema, timeframeToMs, type Candle } from '@signals/types';
 import { runEvaluationCycle } from '../src/evaluation-cycle';
 import { buildEmaBullishCrossScenario } from '../src/scenarios';
 
@@ -90,6 +90,18 @@ describe('vertical slice: add NVDA -> EMA 9/21 bullish cross -> event -> notific
     expect(event!.values.ema9!).toBeGreaterThan(event!.values.ema21!);
     expect(event!.values).toHaveProperty('rsi14');
     expect(event!.values).toHaveProperty('volumeRatio');
+
+    // Structured evidence: the transition itself, not just a sentence.
+    const evidence = SignalEvidenceSchema.parse(event!.evidence);
+    expect(evidence).toMatchObject({
+      type: 'EMA_BULLISH_CROSS',
+      symbol: 'NVDA',
+      timeframe: '5m',
+      condition: { previous: false, current: true },
+      candle: { close: crossCandle.close, timestamp: new Date(crossCandle.time).toISOString() },
+    });
+    expect(evidence.previous.ema9!).toBeLessThanOrEqual(evidence.previous.ema21!);
+    expect(evidence.current.ema9!).toBeGreaterThan(evidence.current.ema21!);
 
     expect(notifier.sent).toHaveLength(1);
     expect(notifier.sent[0]!.message).toEqual({

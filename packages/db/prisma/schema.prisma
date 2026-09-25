@@ -225,6 +225,9 @@ model SignalEvent {
   price              Float
   /// Indicator values explaining the trigger, e.g. {"ema9":181.9,"ema21":181.7,"rsi14":63.2}
   values             Json
+  /// Structured evidence (SignalEvidence v1): previous/current rule values, candle, params.
+  /// Null only for events created before Phase 2.
+  evidence           Json?
   message            String
   deliveryStatus     DeliveryStatus    @default(PENDING)
   deliveredAt        DateTime?

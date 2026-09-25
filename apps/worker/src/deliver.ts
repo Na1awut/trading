@@ -63,6 +63,7 @@ export async function fanOutSignal(
           candleTime: new Date(evaluation.candleTime),
           price: evaluation.price,
           values: evaluation.values as Prisma.InputJsonObject,
+          evidence: (evaluation.evidence ?? undefined) as Prisma.InputJsonObject | undefined,
           message: evaluation.message ?? evaluation.label,
         },
       });

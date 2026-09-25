@@ -3,7 +3,7 @@ import type { PrismaClient, SignalDefinition, SignalState } from '@signals/db';
 import type { MarketDataProvider } from '@signals/market-data';
 import type { Logger, NotificationSender } from '@signals/notifications';
 import {
-  IndicatorContext,
+  createSignalContext,
   evaluateSignal,
   parseSignalParameters,
   type SignalEvaluation,
@@ -250,8 +250,9 @@ async function evaluatePair(
   const { candles } = window;
   if (candles.length === 0) return null;
 
-  // One indicator cache for the whole pair: EMA/RSI/MACD are computed once, not per signal.
-  const context = new IndicatorContext(candles);
+  // One SignalContext (candles + indicator cache) for the whole pair: EMA/RSI/MACD are
+  // computed once, not per signal or per user.
+  const context = createSignalContext(ticker, timeframe, candles);
   const result: PairResult = {
     fetched: window.fetched,
     indicatorSeriesComputed: 0,
@@ -333,7 +334,7 @@ async function evaluatePair(
       previousActive = evaluation.active;
       last = evaluation;
     }
-    result.indicatorSeriesComputed = context.computedSeries.length;
+    result.indicatorSeriesComputed = context.indicators.computedSeries.length;
 
     if (!last || last.candleTime === null) continue;
     const stateData = {

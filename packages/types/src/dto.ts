@@ -8,6 +8,7 @@ import {
   TimeframeSchema,
 } from './market';
 import {
+  SignalEvidenceSchema,
   SignalCategorySchema,
   SignalParametersSchema,
   SignalTypeSchema,
@@ -74,6 +75,8 @@ export const SignalEventSchema = z.object({
   candleTime: z.string(),
   price: z.number(),
   values: SignalValuesSchema,
+  /** Structured explanation; null for events recorded before evidence existed. */
+  evidence: SignalEvidenceSchema.nullable(),
   message: z.string(),
   deliveryStatus: z.enum(['PENDING', 'SENT', 'SUPPRESSED', 'NO_DEVICES', 'FAILED']),
 });

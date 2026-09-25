@@ -8,6 +8,7 @@ import type {
   NotificationSettings,
   SignalDTO,
   SignalEventDTO,
+  SignalEvidence,
   SignalParameters,
   SignalValues,
   Timeframe,
@@ -46,6 +47,7 @@ export function toSignalEventDTO(e: SignalEvent): SignalEventDTO {
     candleTime: e.candleTime.toISOString(),
     price: e.price,
     values: e.values as SignalValues,
+    evidence: (e.evidence as SignalEvidence | null) ?? null,
     message: e.message,
     deliveryStatus: e.deliveryStatus,
   };

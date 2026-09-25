@@ -1,4 +1,5 @@
 import type {
+  SignalEvidence,
   Candle,
   IndicatorSnapshot,
   SignalCategory,
@@ -8,6 +9,7 @@ import type {
   Timeframe,
 } from '@signals/types';
 import { isCandleComplete } from '@signals/types';
+import { isSignalContext, type SignalContext } from './context';
 import { IndicatorContext } from './indicators/context';
 import { getRule } from './rules';
 import { at } from './rules/types';
@@ -40,8 +42,11 @@ export interface EvaluateSignalInput {
   parameters: SignalParameters;
   /** COMPLETED candles only, ascending by time. Ignored when `context` is given. */
   candles?: ReadonlyArray<Candle>;
-  /** Shared indicator cache - pass one per (symbol, timeframe) when evaluating many signals. */
-  context?: IndicatorContext;
+  /**
+   * Shared evaluation context - pass one per (symbol, timeframe) when evaluating many
+   * signals. A SignalContext also supplies symbol/timeframe for the evidence.
+   */
+  context?: SignalContext | IndicatorContext;
   /**
    * Candle index to evaluate (default: the last candle). Used to catch up on missed candles
    * in order without rebuilding indicators.
@@ -70,12 +75,18 @@ export interface SignalEvaluation {
   price: number | null;
   /** Rule values plus standard context (close, RSI 14, volume ratio) for explanations. */
   values: SignalValues;
+  /** Structured previous/current values and candle data (null when not evaluable). */
+  evidence: SignalEvidence | null;
   message: string | null;
 }
 
 export function evaluateSignal(input: EvaluateSignalInput): SignalEvaluation {
   const rule = getRule(input.signalType);
-  const ctx = input.context ?? new IndicatorContext(input.candles ?? []);
+  const signalContext = isSignalContext(input.context) ? input.context : null;
+  const ctx =
+    signalContext?.indicators ??
+    (input.context as IndicatorContext | undefined) ??
+    new IndicatorContext(input.candles ?? []);
   const last = input.index ?? ctx.length - 1;
   if (last >= ctx.length)
     throw new RangeError(`index ${last} out of range (${ctx.length} candles)`);
@@ -95,6 +106,7 @@ export function evaluateSignal(input: EvaluateSignalInput): SignalEvaluation {
       candleTime: ctx.candles[last]?.time ?? null,
       price: ctx.candles[last]?.close ?? null,
       values: {},
+      evidence: null,
       message: null,
     };
   }
@@ -105,7 +117,24 @@ export function evaluateSignal(input: EvaluateSignalInput): SignalEvaluation {
     input.previousActive !== undefined ? input.previousActive : prepared.condition(last - 1);
   const triggered = detectTransition(previousActive, active);
   const candle = ctx.candles[last]!;
-  const values = roundValues({ ...contextValues(ctx, last), ...prepared.values(last) });
+  const standard = contextValues(ctx, last);
+  const values = roundValues({ ...standard, ...prepared.values(last) });
+  const previousCandle = last > 0 ? ctx.candles[last - 1]! : null;
+  const evidence: SignalEvidence = {
+    version: 1,
+    type: input.signalType,
+    symbol: signalContext?.symbol ?? null,
+    timeframe: signalContext?.timeframe ?? null,
+    parameters: input.parameters,
+    condition: { previous: previousActive, current: active },
+    previous: previousCandle
+      ? roundValues({ close: previousCandle.close, ...prepared.values(last - 1) })
+      : {},
+    current: roundValues({ close: candle.close, ...prepared.values(last) }),
+    candle: evidenceCandle(candle),
+    previousCandle: previousCandle ? evidenceCandle(previousCandle) : null,
+    context: roundValues(standard),
+  };
 
   return {
     ...base,
@@ -116,6 +145,7 @@ export function evaluateSignal(input: EvaluateSignalInput): SignalEvaluation {
     candleTime: candle.time,
     price: candle.close,
     values,
+    evidence,
     message: triggered
       ? rule.message({
           params: input.parameters,
@@ -124,6 +154,17 @@ export function evaluateSignal(input: EvaluateSignalInput): SignalEvaluation {
           currency: input.currency ?? 'USD',
         })
       : null,
+  };
+}
+
+function evidenceCandle(c: Candle): SignalEvidence['candle'] {
+  return {
+    timestamp: new Date(c.time).toISOString(),
+    open: c.open,
+    high: c.high,
+    low: c.low,
+    close: c.close,
+    volume: c.volume,
   };
 }
 
