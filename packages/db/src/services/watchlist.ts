@@ -14,10 +14,12 @@ export async function getDefaultWatchlist(db: Db, userId: string) {
 }
 
 export async function upsertAsset(db: Db, asset: AssetInfo) {
+  // Pick fields explicitly: providers may return richer objects than AssetInfo.
+  const data = { name: asset.name, assetClass: asset.assetClass, exchange: asset.exchange, currency: asset.currency };
   return db.asset.upsert({
     where: { symbol: asset.symbol },
-    update: { name: asset.name, assetClass: asset.assetClass, exchange: asset.exchange, currency: asset.currency },
-    create: asset,
+    update: data,
+    create: { symbol: asset.symbol, ...data },
   });
 }
 

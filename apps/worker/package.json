@@ -1,0 +1,27 @@
+{
+  "name": "@signals/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "start": "node dist/main.js",
+    "build": "tsup",
+    "once": "tsx src/main.ts --once",
+    "demo:slice": "tsx scripts/demo-slice.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@signals/config": "workspace:*",
+    "@signals/db": "workspace:*",
+    "@signals/market-data": "workspace:*",
+    "@signals/notifications": "workspace:*",
+    "@signals/signal-engine": "workspace:*",
+    "@signals/types": "workspace:*",
+    "pino": "^9.14.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0"
+  }
+}

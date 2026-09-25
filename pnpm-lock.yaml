@@ -97,6 +97,34 @@ importers:
         specifier: ^8.5.0
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.28)(tsx@4.23.15)(typescript@6.0.3)(yaml@2.9.1)
 
+  apps/worker:
+    dependencies:
+      '@signals/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@signals/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@signals/market-data':
+        specifier: workspace:*
+        version: link:../../packages/market-data
+      '@signals/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
+      '@signals/signal-engine':
+        specifier: workspace:*
+        version: link:../../packages/signal-engine
+      '@signals/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      pino:
+        specifier: ^9.14.0
+        version: 9.14.0
+    devDependencies:
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.28)(tsx@4.23.15)(typescript@6.0.3)(yaml@2.9.1)
+
   packages/config:
     dependencies:
       '@signals/types':
