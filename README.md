@@ -74,22 +74,25 @@ Sign in to the app as `demo@example.com` (dev login) and open **History** to see
 
 ## Commands
 
-| Command                                                 | What it does                                                                       |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `pnpm dev`                                              | API (watch mode) + worker together                                                 |
-| `pnpm dev:api` / `dev:worker`                           | Run one of them                                                                    |
-| `pnpm dev:mobile`                                       | Expo dev server                                                                    |
-| `pnpm test`                                             | All tests (unit + API + worker integration; needs Postgres)                        |
-| `pnpm test:unit`                                        | Unit tests only: engine, market data, config, notifications (no DB needed)         |
-| `pnpm lint`                                             | ESLint (TypeScript strict rules)                                                   |
-| `pnpm typecheck`                                        | `tsc --noEmit` in every package, including the mobile app                          |
-| `pnpm format` / `format:check`                          | Prettier                                                                           |
-| `pnpm build`                                            | Bundle API and worker to `dist/` (tsup)                                            |
-| `pnpm db:migrate`                                       | Create and apply a new migration after editing `schema.prisma` (dev)               |
-| `pnpm db:deploy`                                        | Apply pending migrations (CI and production)                                       |
-| `pnpm db:seed` / `db:studio`                            | Seed demo data / open Prisma Studio                                                |
-| `pnpm --filter @signals/worker once`                    | Run a single evaluation cycle and exit                                             |
-| `pnpm --filter @signals/worker verify:market-data NVDA` | Smoke-test the configured market-data provider (use with a real key before launch) |
+| Command                                                 | What it does                                                                               |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `pnpm dev`                                              | API (watch mode) + worker together                                                         |
+| `pnpm dev:api` / `dev:worker`                           | Run one of them                                                                            |
+| `pnpm dev:mobile`                                       | Expo dev server                                                                            |
+| `pnpm test`                                             | All tests (unit + API + worker integration; needs Postgres)                                |
+| `pnpm test:unit`                                        | Unit tests only: engine, market data, config, notifications (no DB needed)                 |
+| `pnpm lint`                                             | ESLint (TypeScript strict rules)                                                           |
+| `pnpm typecheck`                                        | `tsc --noEmit` in every package, including the mobile app                                  |
+| `pnpm format` / `format:check`                          | Prettier                                                                                   |
+| `pnpm build`                                            | Bundle API and worker to `dist/` (tsup)                                                    |
+| `pnpm db:migrate`                                       | Create and apply a new migration after editing `schema.prisma` (dev)                       |
+| `pnpm db:deploy`                                        | Apply pending migrations (CI and production)                                               |
+| `pnpm db:seed` / `db:studio`                            | Seed demo data / open Prisma Studio                                                        |
+| `pnpm --filter @signals/worker once`                    | Run a single evaluation cycle and exit                                                     |
+| `pnpm --filter @signals/worker verify:market-data NVDA` | Smoke-test the configured market-data provider (use with a real key before launch)         |
+| `pnpm --filter @signals/worker validate:<kind>`         | Phase 3 validations: `market-data`, `security`, `idempotency`, `load`, `db-growth`, `push` |
+| `pnpm --filter @signals/api validate:firebase`          | Firebase Auth against a real project                                                       |
+| `pnpm --filter @signals/mobile validate:network`        | App network-condition checks on the web build (headless Chromium)                          |
 
 ## Database and migrations
 
@@ -190,8 +193,11 @@ See the checklist in [docs/PRODUCTION.md](docs/PRODUCTION.md#security-checklist)
 
 ## Status
 
-Phase 2 (production readiness) is implemented. The remaining steps that need credentials or
-devices are listed in [docs/PRODUCTION.md](docs/PRODUCTION.md#manual-setup-still-required).
+Phase 3 (real-world validation) is done as far as this environment allows. **The beta is
+BLOCKED**: live market data, Firebase Auth, FCM and the deep link on a physical Android
+device have not been validated. See
+[docs/REAL_WORLD_VALIDATION.md](docs/REAL_WORLD_VALIDATION.md) for what was and was not
+validated, the fixes, the risks, the device protocol and the release gate.
 Known limitations:
 
 - **Market data:** the Twelve Data integration is tested against documented response

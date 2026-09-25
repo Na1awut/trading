@@ -54,7 +54,11 @@ vendor.
 > **Not verified against the live API.** The development environment could not reach
 > `api.twelvedata.com` (egress is blocked), so the adapter was built from the documented
 > response format and tested against fixtures in `packages/market-data/test/fixtures`.
-> Before production, run the smoke test in [PRODUCTION.md](PRODUCTION.md#verify-market-data).
+> Before production, run `pnpm --filter @signals/worker validate:market-data` with a real
+> key. It records HTTP status, latency, rate-limit headers, timestamps, candle counts and
+> field drift for AAPL, NVDA, SPY and BTC/USD on every timeframe, and saves sanitized
+> responses you can commit as regression fixtures. See
+> [REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md#2-market-data).
 
 ## Configuration
 
@@ -122,7 +126,18 @@ Each attempt logs the vendor, operation, symbol, path, HTTP status, attempt numb
 and error code; it never logs the query string or key.
 
 The API degrades gracefully. A symbol whose quote fails shows `quoteError` in the watchlist
-while the other symbols still load.
+while the other symbols still load. Anywhere else, a vendor failure is answered with
+`{ code: "MARKET_DATA_UNAVAILABLE" }` and **503** for transient conditions (rate limit with
+`Retry-After`, timeout, network, 5xx) or **502** for configuration and plan problems (bad key,
+feature not on the plan, malformed response). Vendor details go to the logs, never to clients.
+
+## Trading sessions
+
+`MARKET_SESSION_MODE=regular` (the default) requests regular-hours bars only. `extended`
+adds Twelve Data's `prepost=true` for US equities on 1m/5m/15m, which the vendor documents
+as plan-dependent. It is never sent for crypto pairs, and daily bars are unaffected.
+`auditCandles()` (used by `validate:market-data`) classifies each bar's session in
+America/New_York, so the live run shows which sessions the plan actually returns.
 
 ## Caching
 

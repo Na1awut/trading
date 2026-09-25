@@ -39,32 +39,36 @@ problems. Production (`NODE_ENV=production`) additionally **rejects**: `AUTH_MOD
 `TRUST_PROXY=true`, and retention shorter than the signal lookback. It turns API docs off
 unless `ENABLE_API_DOCS=true`.
 
-| Variable                                                                                                         | Used by     | Production value                                                        |
-| ---------------------------------------------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------- |
-| `NODE_ENV`                                                                                                       | all         | `production`                                                            |
-| `DATABASE_URL`                                                                                                   | all         | Managed Postgres URL (with `sslmode=require` if your provider needs it) |
-| `LOG_LEVEL`                                                                                                      | all         | `info`                                                                  |
-| `AUTH_MODE`                                                                                                      | API         | `firebase`                                                              |
-| `FIREBASE_PROJECT_ID`                                                                                            | API, worker | Your Firebase project ID                                                |
-| `FIREBASE_SERVICE_ACCOUNT_BASE64` **or** `FIREBASE_SERVICE_ACCOUNT_PATH` **or** `GOOGLE_APPLICATION_CREDENTIALS` | API, worker | Service account (secret manager)                                        |
-| `AUTH_REQUIRE_EMAIL_VERIFIED`                                                                                    | API         | `true` recommended                                                      |
-| `AUTH_CHECK_REVOKED`                                                                                             | API         | `true` if you revoke sessions (one extra Firebase call per request)     |
-| `CORS_ORIGINS`                                                                                                   | API         | Explicit origins; the native app does not need CORS                     |
-| `TRUST_PROXY`                                                                                                    | API         | Load balancer hop count (e.g. `1`) or its CIDRs                         |
-| `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS`                                                                         | API         | Per client IP (default 120/min)                                         |
-| `ENABLE_API_DOCS`                                                                                                | API         | `false` (default in production)                                         |
-| `NOTIFICATION_DRIVER`                                                                                            | worker      | `fcm`                                                                   |
-| `MARKET_DATA_PROVIDER` / `MARKET_DATA_VENDOR`                                                                    | API, worker | `real` / `twelvedata`                                                   |
-| `MARKET_DATA_API_KEY`                                                                                            | API, worker | Secret                                                                  |
-| `MARKET_DATA_DELAYED`                                                                                            | API, worker | Match your plan                                                         |
-| `MARKET_DATA_RATE_LIMIT_PER_MINUTE`                                                                              | API, worker | Plan quota ÷ number of processes                                        |
-| `SIGNAL_DEFAULT_TIMEFRAME`                                                                                       | API         | e.g. `5m` or `15m`                                                      |
-| `SIGNAL_POLL_INTERVAL_MS`                                                                                        | worker      | e.g. `15000` (pairs are skipped until a candle closes)                  |
-| `CANDLE_CLOSE_GRACE_MS`                                                                                          | API, worker | `5000`; raise it if your vendor publishes bars late                     |
-| `WORKER_SHARD_INDEX` / `WORKER_SHARD_COUNT`                                                                      | worker      | `0` / `1` unless sharded                                                |
-| `WORKER_HEALTH_PORT`                                                                                             | worker      | e.g. `9100` for liveness probes                                         |
-| `NOTIFICATION_*`                                                                                                 | worker      | Defaults are sensible (5 attempts, 30 s base backoff, 24 h max age)     |
-| `CANDLE_RETENTION_DAYS_*`                                                                                        | worker      | Defaults: 1m 7 d, 5m 60 d, 15m 180 d, 1h 730 d, 1d forever              |
+| Variable                                                                                                         | Used by     | Production value                                                                    |
+| ---------------------------------------------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------- |
+| `NODE_ENV`                                                                                                       | all         | `production`                                                                        |
+| `DATABASE_URL`                                                                                                   | all         | Managed Postgres URL (with `sslmode=require` if your provider needs it)             |
+| `LOG_LEVEL`                                                                                                      | all         | `info`                                                                              |
+| `AUTH_MODE`                                                                                                      | API         | `firebase`                                                                          |
+| `FIREBASE_PROJECT_ID`                                                                                            | API, worker | Your Firebase project ID                                                            |
+| `FIREBASE_SERVICE_ACCOUNT_BASE64` **or** `FIREBASE_SERVICE_ACCOUNT_PATH` **or** `GOOGLE_APPLICATION_CREDENTIALS` | API, worker | Service account (secret manager)                                                    |
+| `AUTH_REQUIRE_EMAIL_VERIFIED`                                                                                    | API         | `true` recommended                                                                  |
+| `AUTH_CHECK_REVOKED`                                                                                             | API         | `true` if you revoke sessions (one extra Firebase call per request)                 |
+| `CORS_ORIGINS`                                                                                                   | API         | Explicit origins; the native app does not need CORS                                 |
+| `TRUST_PROXY`                                                                                                    | API         | Load balancer hop count (e.g. `1`) or its CIDRs                                     |
+| `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS`                                                                         | API         | Per client IP (default 120/min)                                                     |
+| `ENABLE_API_DOCS`                                                                                                | API         | `false` (default in production)                                                     |
+| `NOTIFICATION_DRIVER`                                                                                            | worker      | `fcm`                                                                               |
+| `MARKET_DATA_PROVIDER` / `MARKET_DATA_VENDOR`                                                                    | API, worker | `real` / `twelvedata`                                                               |
+| `MARKET_DATA_API_KEY`                                                                                            | API, worker | Secret                                                                              |
+| `MARKET_DATA_DELAYED`                                                                                            | API, worker | Match your plan                                                                     |
+| `MARKET_DATA_RATE_LIMIT_PER_MINUTE`                                                                              | API, worker | Plan quota ÷ number of processes                                                    |
+| `SIGNAL_DEFAULT_TIMEFRAME`                                                                                       | API         | e.g. `5m` or `15m`                                                                  |
+| `SIGNAL_POLL_INTERVAL_MS`                                                                                        | worker      | e.g. `15000` (pairs are skipped until a candle closes)                              |
+| `CANDLE_CLOSE_GRACE_MS`                                                                                          | API, worker | `5000`; raise it if your vendor publishes bars late                                 |
+| `WORKER_SHARD_INDEX` / `WORKER_SHARD_COUNT`                                                                      | worker      | `0` / `1` unless sharded                                                            |
+| `WORKER_HEALTH_PORT`                                                                                             | worker      | e.g. `9100` for liveness probes                                                     |
+| `NOTIFICATION_*`                                                                                                 | worker      | Defaults are sensible (5 attempts, 30 s base backoff, 24 h max age)                 |
+| `NOTIFICATION_DELIVERY_CONCURRENCY`                                                                              | worker      | `8` (push requests in flight per worker)                                            |
+| `MARKET_SESSION_MODE`                                                                                            | API, worker | `regular` (US equities, 09:30–16:00 ET); `extended` needs a plan with pre/post data |
+| `METRICS_TOKEN`                                                                                                  | API         | ≥ 16 random characters to enable `GET /metrics`; unset disables it                  |
+| `METRICS_LOG_INTERVAL_MS`                                                                                        | worker      | `300000` (metrics snapshot in the logs); `0` = off                                  |
+| `CANDLE_RETENTION_DAYS_*`                                                                                        | worker      | Defaults: 1m 7 d, 5m 60 d, 15m 180 d, 1h 730 d, 1d forever                          |
 
 Every variable, with comments, is in [`.env.example`](../.env.example).
 
@@ -166,6 +170,28 @@ config and app level; push payloads carry identifiers only.
 - Worker cycle and pair lines carry `evaluationCycleId`, `symbol`, `timeframe`,
   `subscriptionsEvaluated`, `eventsCreated`, `notificationsSent` and `durationMs`.
 
+**Metrics.** Counters, gauges and timings are kept in memory per process and are exposed
+as JSON or Prometheus text (`?format=prometheus`):
+
+- API: `GET /metrics` with `Authorization: Bearer $METRICS_TOKEN` (the route does not exist
+  without a token). `http_requests_total{route,status}`, `http_request_duration_ms`,
+  `market_data_cache_hits_total{kind}` / `market_data_cache_misses_total{kind}` and the
+  market-data series below.
+- Worker: `GET :WORKER_HEALTH_PORT/metrics` (internal port), plus a `metrics snapshot` log
+  line every `METRICS_LOG_INTERVAL_MS`.
+
+| Metric                                                                                                                                       | Meaning                                         |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `worker_cycles_total`, `worker_cycle_failures_total`, `worker_cycle_duration_ms`                                                             | Cycles run, crashed, and how long they take     |
+| `market_data_requests_total{vendor,operation,ok}`, `market_data_request_failures_total{code}`, `market_data_request_duration_ms`             | Vendor calls, failures by code, latency         |
+| `candle_store_hits_total` / `candle_store_misses_total`                                                                                      | Pairs served from `MarketCandle` vs fetched     |
+| `worker_pairs_evaluated_total`, `worker_pairs_skipped_total{reason}`                                                                         | Pairs evaluated; skipped (up to date / backoff) |
+| `signals_triggered_total`, `signal_events_created_total`, `signal_events_duplicate_total`                                                    | Triggers, events recorded, duplicates absorbed  |
+| `notifications_sent_total`, `notification_retries_total`, `notification_failures_total{permanent}`, `notification_deliveries_total{outcome}` | Push outcomes                                   |
+| `notifications_pending` (gauge)                                                                                                              | Events waiting to be (re)sent or mid-send       |
+
+Counters reset when a process restarts; alert on rates, not absolute values.
+
 Suggested alerts:
 
 | Signal           | Source                                                                                                               | Alert when                                                      |
@@ -195,7 +221,9 @@ Suggested alerts:
 
 These steps need credentials, devices or accounts that the development environment did not
 have. They are implemented and tested with mocks and fixtures, but have **not** been run for
-real.
+real. [REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md) lists exactly what was and was not
+validated, the scripts that validate each item once credentials exist, the Android device
+protocol, and the beta release gate.
 
 1. **Twelve Data:** get a key and run `verify:market-data` against the live API (see above).
 2. **Firebase Auth:** create the project and service account, set the variables, and sign

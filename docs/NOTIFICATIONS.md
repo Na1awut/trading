@@ -8,7 +8,11 @@
    have several devices, capped at `MAX_DEVICES_PER_USER`; the least recently seen are pruned
    first. The token is unregistered on sign-out.
 2. When a signal fires, the worker **records** one `SignalEvent` per subscriber
-   (`PENDING`), then **delivers** each one through `deliverEvent()`.
+   (`PENDING`) with one multi-row `INSERT … ON CONFLICT DO NOTHING` per 500 subscribers, then
+   **delivers** them through `deliverEvent()`, `NOTIFICATION_DELIVERY_CONCURRENCY` (8) at a
+   time. The retry sweep uses the same concurrency. Load validation measured ~45 ms per
+   subscriber when this was sequential; see
+   [REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md#8-load-simulation).
 3. The notification contains:
    - **Title:** `NVDA — EMA Bullish Cross`
    - **Body:** `EMA 9 crossed above EMA 21 at $182.30 (5m)`
