@@ -1,11 +1,20 @@
 import type { Prisma } from '@prisma/client';
-import { InvalidSignalParametersError, getRule, parseSignalParameters, signalName } from '@signals/signal-engine';
+import {
+  InvalidSignalParametersError,
+  getRule,
+  parseSignalParameters,
+  signalName,
+} from '@signals/signal-engine';
 import type { SignalDTO, SignalParameters, SignalType, Timeframe } from '@signals/types';
 import type { Db } from '../client';
 import { ConflictError, DomainValidationError, NotFoundError } from '../errors';
 import { toSignalDTO } from './mappers';
 
-export async function listUserSignals(db: Db, userId: string, ticker?: string): Promise<SignalDTO[]> {
+export async function listUserSignals(
+  db: Db,
+  userId: string,
+  ticker?: string,
+): Promise<SignalDTO[]> {
   const subs = await db.signalSubscription.findMany({
     where: { userId, ...(ticker ? { signalDefinition: { ticker } } : {}) },
     include: { signalDefinition: true },
@@ -75,10 +84,14 @@ export async function updateSignal(
   const isPreset = def.ownerId === null;
 
   if ((patch.parameters || patch.name) && isPreset) {
-    throw new ConflictError('Preset signals are shared and cannot be edited - create a custom signal instead');
+    throw new ConflictError(
+      'Preset signals are shared and cannot be edited - create a custom signal instead',
+    );
   }
   if (patch.parameters || patch.name) {
-    const parameters = patch.parameters ? validateParams(def.signalType, patch.parameters) : undefined;
+    const parameters = patch.parameters
+      ? validateParams(def.signalType, patch.parameters)
+      : undefined;
     await db.signalDefinition.update({
       where: { id: def.id },
       data: {

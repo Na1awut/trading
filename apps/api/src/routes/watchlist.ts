@@ -1,6 +1,11 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { addToWatchlist, listWatchlistItems, removeFromWatchlist, setTickerAlerts } from '@signals/db';
+import {
+  addToWatchlist,
+  listWatchlistItems,
+  removeFromWatchlist,
+  setTickerAlerts,
+} from '@signals/db';
 import type { MarketDataProvider } from '@signals/market-data';
 import { UnknownSymbolError } from '@signals/market-data';
 import {
@@ -62,7 +67,10 @@ export const watchlistRoutes: FastifyPluginAsyncZod<AppDeps> = async (app, deps)
         tags: ['watchlist'],
         summary: 'Add a ticker (idempotent). Subscribes to preset signals for it.',
         body: AddWatchlistItemBodySchema,
-        response: { 200: z.object({ item: WatchlistItemSchema }), 201: z.object({ item: WatchlistItemSchema }) },
+        response: {
+          200: z.object({ item: WatchlistItemSchema }),
+          201: z.object({ item: WatchlistItemSchema }),
+        },
       },
     },
     async (req, reply) => {
@@ -73,7 +81,9 @@ export const watchlistRoutes: FastifyPluginAsyncZod<AppDeps> = async (app, deps)
         asset,
         timeframe: deps.config.SIGNAL_DEFAULT_TIMEFRAME,
       });
-      return reply.status(created ? 201 : 200).send({ item: toDTO(item, await safeQuote(deps.marketData, item.symbol)) });
+      return reply
+        .status(created ? 201 : 200)
+        .send({ item: toDTO(item, await safeQuote(deps.marketData, item.symbol)) });
     },
   );
 

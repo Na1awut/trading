@@ -1,12 +1,22 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { getSettings, updateSettings } from '@signals/db';
-import { MeSchema, NotificationSettingsSchema, UpdateNotificationSettingsBodySchema } from '@signals/types';
+import {
+  MeSchema,
+  NotificationSettingsSchema,
+  UpdateNotificationSettingsBodySchema,
+} from '@signals/types';
 import type { AppDeps } from '../deps';
 
 export const meRoutes: FastifyPluginAsyncZod<AppDeps> = async (app, deps) => {
   app.get(
     '/me',
-    { schema: { tags: ['user'], summary: 'Current user and notification settings', response: { 200: MeSchema } } },
+    {
+      schema: {
+        tags: ['user'],
+        summary: 'Current user and notification settings',
+        response: { 200: MeSchema },
+      },
+    },
     async (req) => {
       const user = await deps.prisma.user.findUniqueOrThrow({ where: { id: req.user.id } });
       return {
@@ -23,7 +33,8 @@ export const meRoutes: FastifyPluginAsyncZod<AppDeps> = async (app, deps) => {
     {
       schema: {
         tags: ['user'],
-        summary: 'Update notification settings (global on/off, category toggles, future quiet hours)',
+        summary:
+          'Update notification settings (global on/off, category toggles, future quiet hours)',
         body: UpdateNotificationSettingsBodySchema,
         response: { 200: NotificationSettingsSchema },
       },

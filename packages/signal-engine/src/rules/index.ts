@@ -1,6 +1,11 @@
 import type { SignalCatalogEntry, SignalParameters, SignalType } from '@signals/types';
 import { SIGNAL_TYPES } from '@signals/types';
-import { emaBearishCross, emaBullishCross, priceCrossAboveEma, priceCrossBelowEma } from './moving-average';
+import {
+  emaBearishCross,
+  emaBullishCross,
+  priceCrossAboveEma,
+  priceCrossBelowEma,
+} from './moving-average';
 import {
   macdBearishCross,
   macdBullishCross,

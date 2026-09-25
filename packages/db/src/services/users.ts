@@ -34,7 +34,11 @@ export async function findOrCreateUser(db: Db, claims: IdentityClaims) {
 }
 
 export async function getSettings(db: Db, userId: string): Promise<NotificationSettings> {
-  const s = await db.notificationSettings.upsert({ where: { userId }, update: {}, create: { userId } });
+  const s = await db.notificationSettings.upsert({
+    where: { userId },
+    update: {},
+    create: { userId },
+  });
   return toSettingsDTO(s);
 }
 

@@ -9,7 +9,11 @@ export interface Scheduler {
  * COMPLETES (never overlapping). Replaceable by BullMQ repeatable jobs / cron / a serverless
  * schedule because the task itself (`runEvaluationCycle`) is stateless.
  */
-export function startScheduler(opts: { intervalMs: number; task: () => Promise<void>; logger: Logger }): Scheduler {
+export function startScheduler(opts: {
+  intervalMs: number;
+  task: () => Promise<void>;
+  logger: Logger;
+}): Scheduler {
   let timer: NodeJS.Timeout | undefined;
   let running: Promise<void> | undefined;
   let stopped = false;

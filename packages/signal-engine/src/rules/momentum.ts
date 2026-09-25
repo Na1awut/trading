@@ -54,7 +54,8 @@ function rsiRule(
 //   RSI_CROSS_DOWN  rsi < 70 becomes true  -> crossed downward through 70 (left overbought)
 export const rsiOverbought = rsiRule('RSI_OVERBOUGHT', {
   label: 'RSI Overbought',
-  description: 'RSI rises above the overbought level (default 70): momentum is stretched to the upside.',
+  description:
+    'RSI rises above the overbought level (default 70): momentum is stretched to the upside.',
   level: 70,
   above: true,
   name: (p) => `RSI ${p.period} > ${p.level}`,
@@ -63,7 +64,8 @@ export const rsiOverbought = rsiRule('RSI_OVERBOUGHT', {
 
 export const rsiOversold = rsiRule('RSI_OVERSOLD', {
   label: 'RSI Oversold',
-  description: 'RSI falls below the oversold level (default 30): momentum is stretched to the downside.',
+  description:
+    'RSI falls below the oversold level (default 30): momentum is stretched to the downside.',
   level: 30,
   above: false,
   name: (p) => `RSI ${p.period} < ${p.level}`,
@@ -81,7 +83,8 @@ export const rsiCrossUp = rsiRule('RSI_CROSS_UP', {
 
 export const rsiCrossDown = rsiRule('RSI_CROSS_DOWN', {
   label: 'RSI Crossed Down',
-  description: 'RSI crosses downward through the level (default 70), often read as leaving overbought.',
+  description:
+    'RSI crosses downward through the level (default 70), often read as leaving overbought.',
   level: 70,
   above: false,
   name: (p) => `RSI ${p.period} crosses down through ${p.level}`,

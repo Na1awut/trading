@@ -37,7 +37,9 @@ export const deviceRoutes: FastifyPluginAsyncZod<AppDeps> = async (app, deps) =>
       },
     },
     async (req, reply) => {
-      await deps.prisma.device.deleteMany({ where: { token: req.body.token, userId: req.user.id } });
+      await deps.prisma.device.deleteMany({
+        where: { token: req.body.token, userId: req.user.id },
+      });
       return reply.status(204).send(null);
     },
   );
@@ -57,7 +59,11 @@ export const deviceRoutes: FastifyPluginAsyncZod<AppDeps> = async (app, deps) =>
       if (devices.length === 0) return { devices: 0, delivered: 0 };
       const results = await deps.notifier.send(
         devices.map((d) => ({ token: d.token, provider: d.provider, platform: d.platform })),
-        { title: 'Test notification', body: 'Push notifications are working.', data: { type: 'test' } },
+        {
+          title: 'Test notification',
+          body: 'Push notifications are working.',
+          data: { type: 'test' },
+        },
       );
       return { devices: devices.length, delivered: results.filter((r) => r.success).length };
     },

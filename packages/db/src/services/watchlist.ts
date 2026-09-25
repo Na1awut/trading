@@ -15,7 +15,12 @@ export async function getDefaultWatchlist(db: Db, userId: string) {
 
 export async function upsertAsset(db: Db, asset: AssetInfo) {
   // Pick fields explicitly: providers may return richer objects than AssetInfo.
-  const data = { name: asset.name, assetClass: asset.assetClass, exchange: asset.exchange, currency: asset.currency };
+  const data = {
+    name: asset.name,
+    assetClass: asset.assetClass,
+    exchange: asset.exchange,
+    currency: asset.currency,
+  };
   return db.asset.upsert({
     where: { symbol: asset.symbol },
     update: data,
@@ -62,11 +67,18 @@ export async function removeFromWatchlist(db: Db, userId: string, symbol: string
   const wl = await getDefaultWatchlist(db, userId);
   const { count } = await db.watchlistItem.deleteMany({ where: { watchlistId: wl.id, symbol } });
   if (count === 0) throw new NotFoundError(`${symbol} is not in your watchlist`);
-  await db.signalSubscription.deleteMany({ where: { userId, signalDefinition: { ticker: symbol } } });
+  await db.signalSubscription.deleteMany({
+    where: { userId, signalDefinition: { ticker: symbol } },
+  });
   await db.signalDefinition.deleteMany({ where: { ownerId: userId, ticker: symbol } });
 }
 
-export async function setTickerAlerts(db: Db, userId: string, symbol: string, alertsEnabled: boolean) {
+export async function setTickerAlerts(
+  db: Db,
+  userId: string,
+  symbol: string,
+  alertsEnabled: boolean,
+) {
   const wl = await getDefaultWatchlist(db, userId);
   const { count } = await db.watchlistItem.updateMany({
     where: { watchlistId: wl.id, symbol },

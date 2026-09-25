@@ -25,7 +25,9 @@ import { watchlistRoutes } from './routes/watchlist';
 export async function buildApp(deps: AppDeps, opts: { logger?: FastifyBaseLogger | false } = {}) {
   const { config } = deps;
   const app = Fastify({
-    ...(opts.logger ? { loggerInstance: opts.logger } : { logger: opts.logger ?? { level: config.LOG_LEVEL } }),
+    ...(opts.logger
+      ? { loggerInstance: opts.logger }
+      : { logger: opts.logger ?? { level: config.LOG_LEVEL } }),
     trustProxy: true,
     bodyLimit: 64 * 1024,
   }).withTypeProvider<ZodTypeProvider>();
@@ -37,7 +39,10 @@ export async function buildApp(deps: AppDeps, opts: { logger?: FastifyBaseLogger
   // JSON API: CSP is irrelevant for responses and would break the Swagger UI assets.
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(cors, {
-    origin: config.CORS_ORIGINS.trim() === '*' ? true : config.CORS_ORIGINS.split(',').map((o) => o.trim()),
+    origin:
+      config.CORS_ORIGINS.trim() === '*'
+        ? true
+        : config.CORS_ORIGINS.split(',').map((o) => o.trim()),
   });
   await app.register(rateLimit, {
     max: config.RATE_LIMIT_MAX,
@@ -60,7 +65,8 @@ export async function buildApp(deps: AppDeps, opts: { logger?: FastifyBaseLogger
             bearerAuth: {
               type: 'http',
               scheme: 'bearer',
-              description: 'Firebase ID token (AUTH_MODE=firebase) or `dev:<email>` (AUTH_MODE=dev)',
+              description:
+                'Firebase ID token (AUTH_MODE=firebase) or `dev:<email>` (AUTH_MODE=dev)',
             },
           },
         },

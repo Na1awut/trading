@@ -60,8 +60,8 @@ describe('ema', () => {
 describe('rsi (Wilder, 14)', () => {
   // Classic Wilder/StockCharts worked example.
   const closes = [
-    44.34, 44.09, 44.15, 43.61, 44.33, 44.83, 45.1, 45.42, 45.84, 46.08, 45.89, 46.03, 45.61,
-    46.28, 46.28, 46.0, 46.03, 46.41, 46.22, 45.64,
+    44.34, 44.09, 44.15, 43.61, 44.33, 44.83, 45.1, 45.42, 45.84, 46.08, 45.89, 46.03, 45.61, 46.28,
+    46.28, 46.0, 46.03, 46.41, 46.22, 45.64,
   ];
 
   it('is null until 14 price changes are available', () => {
@@ -92,8 +92,18 @@ describe('rsi (Wilder, 14)', () => {
 
   it('handles flat and one-directional series', () => {
     expect(rsi(new Array(20).fill(10), 14)[19]).toBe(50);
-    expect(rsi(Array.from({ length: 20 }, (_, i) => i + 1), 14)[19]).toBe(100);
-    expect(rsi(Array.from({ length: 20 }, (_, i) => 100 - i), 14)[19]).toBe(0);
+    expect(
+      rsi(
+        Array.from({ length: 20 }, (_, i) => i + 1),
+        14,
+      )[19],
+    ).toBe(100);
+    expect(
+      rsi(
+        Array.from({ length: 20 }, (_, i) => 100 - i),
+        14,
+      )[19],
+    ).toBe(0);
   });
 
   it('stays within [0, 100]', () => {

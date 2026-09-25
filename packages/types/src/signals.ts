@@ -12,6 +12,14 @@ export const SIGNAL_CATEGORY_LABELS: Record<SignalCategory, string> = {
   VOLUME: 'Volume signal',
 };
 
+/** Plural group headings for settings / configuration lists. */
+export const SIGNAL_CATEGORY_GROUP_LABELS: Record<SignalCategory, string> = {
+  PRICE: 'Price signals',
+  MOVING_AVERAGE: 'Trend signals (moving averages)',
+  MOMENTUM: 'Momentum signals (RSI, MACD)',
+  VOLUME: 'Volume signals',
+};
+
 export const SIGNAL_TYPES = [
   // Price
   'PRICE_ABOVE',

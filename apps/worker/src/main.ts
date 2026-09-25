@@ -42,10 +42,18 @@ async function main() {
   }
 
   logger.info(
-    { intervalMs: config.SIGNAL_POLL_INTERVAL_MS, provider: marketData.name, notifications: notifier.name },
+    {
+      intervalMs: config.SIGNAL_POLL_INTERVAL_MS,
+      provider: marketData.name,
+      notifications: notifier.name,
+    },
     'signal worker started',
   );
-  const scheduler = startScheduler({ intervalMs: config.SIGNAL_POLL_INTERVAL_MS, task: cycle, logger });
+  const scheduler = startScheduler({
+    intervalMs: config.SIGNAL_POLL_INTERVAL_MS,
+    task: cycle,
+    logger,
+  });
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'stopping worker (finishing current cycle)');

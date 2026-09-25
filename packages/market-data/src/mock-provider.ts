@@ -70,7 +70,11 @@ export class MockMarketDataProvider implements MarketDataProvider {
     };
   }
 
-  async getHistoricalCandles(symbol: string, timeframe: Timeframe, limit: number): Promise<Candle[]> {
+  async getHistoricalCandles(
+    symbol: string,
+    timeframe: Timeframe,
+    limit: number,
+  ): Promise<Candle[]> {
     const asset = this.require(symbol);
     const tf = timeframeToMs(timeframe);
     const now = this.now();
@@ -88,7 +92,7 @@ export class MockMarketDataProvider implements MarketDataProvider {
   /** Exposed for tests/demo tooling. */
   priceAt(asset: MockAsset, t: number): number {
     const seed = hash(asset.symbol);
-    const phase = (n: number) => ((seed >>> n) % 1000) / 1000 * 2 * Math.PI;
+    const phase = (n: number) => (((seed >>> n) % 1000) / 1000) * 2 * Math.PI;
     const minutes = t / MINUTE;
     const wave =
       0.006 * Math.sin((2 * Math.PI * minutes) / 47 + phase(1)) +
@@ -133,7 +137,13 @@ export class MockMarketDataProvider implements MarketDataProvider {
 }
 
 function toInfo(a: MockAsset): AssetInfo {
-  return { symbol: a.symbol, name: a.name, assetClass: a.assetClass, exchange: a.exchange, currency: a.currency };
+  return {
+    symbol: a.symbol,
+    name: a.name,
+    assetClass: a.assetClass,
+    exchange: a.exchange,
+    currency: a.currency,
+  };
 }
 
 function rank(a: AssetInfo, q: string): number {
@@ -171,4 +181,3 @@ function smoothNoise(seed: number, x: number): number {
 function lattice(seed: number, i: number): number {
   return (hash(`${seed}:${i}`) / 0xffffffff) * 2 - 1;
 }
-

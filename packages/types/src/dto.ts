@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { AssetClassSchema, AssetInfoSchema, QuoteSchema, SymbolSchema, TimeframeSchema } from './market';
+import {
+  AssetClassSchema,
+  AssetInfoSchema,
+  QuoteSchema,
+  SymbolSchema,
+  TimeframeSchema,
+} from './market';
 import {
   SignalCategorySchema,
   SignalParametersSchema,
@@ -155,8 +161,14 @@ export const NotificationSettingsSchema = z.object({
   /** Categories the user has switched off entirely (e.g. ['VOLUME']). */
   disabledCategories: z.array(SignalCategorySchema),
   // Future-compatible fields: stored and returned but not yet enforced by the worker.
-  quietHoursStart: z.string().regex(/^\d{2}:\d{2}$/).nullable(),
-  quietHoursEnd: z.string().regex(/^\d{2}:\d{2}$/).nullable(),
+  quietHoursStart: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .nullable(),
+  quietHoursEnd: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .nullable(),
   timezone: z.string().min(1).max(64),
   notificationFrequency: z.enum(['REALTIME', 'HOURLY_DIGEST', 'DAILY_DIGEST']),
   minimumSignalStrength: z.number().int().min(0).max(100),

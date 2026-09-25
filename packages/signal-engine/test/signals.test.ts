@@ -18,7 +18,12 @@ import {
 import { MINUTE, candlesFrom, randomWalk } from './helpers';
 
 /** Evaluate a signal at every prefix of the series, returning indices where it fired. */
-function firingIndices(type: SignalType, closes: number[], params: unknown = {}, volumes?: number[]) {
+function firingIndices(
+  type: SignalType,
+  closes: number[],
+  params: unknown = {},
+  volumes?: number[],
+) {
   const candles = candlesFrom(closes, volumes);
   const parameters = parseSignalParameters(type, params);
   const fired: number[] = [];
@@ -174,7 +179,13 @@ describe('RSI threshold crossing', () => {
     const r2 = rsi(topThenDrop, 14);
     const fired = firingIndices('RSI_CROSS_DOWN', topThenDrop);
     expect(fired.length).toBeGreaterThan(0);
-    expect(fired).toEqual(crossIndices(r2, r2.map(() => 70), 'down'));
+    expect(fired).toEqual(
+      crossIndices(
+        r2,
+        r2.map(() => 70),
+        'down',
+      ),
+    );
   });
 
   it('message states the level and current RSI', () => {
@@ -337,7 +348,16 @@ describe('completed candles & snapshot', () => {
 
   it('snapshot exposes all indicators used by the detail screen', () => {
     const snap = computeIndicatorSnapshot(candlesFrom(randomWalk(120, 4)));
-    for (const key of ['ema9', 'ema20', 'ema21', 'ema50', 'rsi14', 'macd', 'macdSignal', 'avgVolume20'] as const) {
+    for (const key of [
+      'ema9',
+      'ema20',
+      'ema21',
+      'ema50',
+      'rsi14',
+      'macd',
+      'macdSignal',
+      'avgVolume20',
+    ] as const) {
       expect(snap[key]).not.toBeNull();
     }
   });

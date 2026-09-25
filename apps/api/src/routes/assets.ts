@@ -49,7 +49,12 @@ export const assetRoutes: FastifyPluginAsyncZod<AppDeps> = async (app, deps) => 
       },
     },
     async (req) =>
-      getAssetDetail(deps, req.user.id, req.params.symbol, req.query.timeframe ?? deps.config.SIGNAL_DEFAULT_TIMEFRAME),
+      getAssetDetail(
+        deps,
+        req.user.id,
+        req.params.symbol,
+        req.query.timeframe ?? deps.config.SIGNAL_DEFAULT_TIMEFRAME,
+      ),
   );
 
   app.get(
@@ -70,7 +75,11 @@ export const assetRoutes: FastifyPluginAsyncZod<AppDeps> = async (app, deps) => 
       const timeframe = req.query.timeframe ?? deps.config.SIGNAL_DEFAULT_TIMEFRAME;
       return {
         timeframe,
-        candles: await deps.marketData.getHistoricalCandles(req.params.symbol, timeframe, req.query.limit),
+        candles: await deps.marketData.getHistoricalCandles(
+          req.params.symbol,
+          timeframe,
+          req.query.limit,
+        ),
       };
     },
   );
@@ -85,6 +94,8 @@ export const assetRoutes: FastifyPluginAsyncZod<AppDeps> = async (app, deps) => 
         response: { 200: z.object({ signals: z.array(SignalSchema) }) },
       },
     },
-    async (req) => ({ signals: await listUserSignals(deps.prisma, req.user.id, req.params.symbol) }),
+    async (req) => ({
+      signals: await listUserSignals(deps.prisma, req.user.id, req.params.symbol),
+    }),
   );
 };

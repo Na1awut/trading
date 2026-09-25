@@ -13,7 +13,9 @@ import type {
   Timeframe,
 } from '@signals/types';
 
-export function toSignalDTO(sub: SignalSubscription & { signalDefinition: SignalDefinition }): SignalDTO {
+export function toSignalDTO(
+  sub: SignalSubscription & { signalDefinition: SignalDefinition },
+): SignalDTO {
   const d = sub.signalDefinition;
   return {
     id: sub.id,

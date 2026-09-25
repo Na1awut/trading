@@ -36,7 +36,10 @@ export interface CycleSummary {
   durationMs: number;
 }
 
-type ActiveDefinition = SignalDefinition & { state: SignalState | null; asset: { currency: string } };
+type ActiveDefinition = SignalDefinition & {
+  state: SignalState | null;
+  asset: { currency: string };
+};
 
 /**
  * ONE evaluation pass over every active (ticker, timeframe) pair. Stateless between calls
@@ -94,7 +97,11 @@ async function evaluatePair(
   now: number,
   summary: CycleSummary,
 ): Promise<void> {
-  const raw = await deps.marketData.getHistoricalCandles(ticker, timeframe, deps.candleLookback ?? 250);
+  const raw = await deps.marketData.getHistoricalCandles(
+    ticker,
+    timeframe,
+    deps.candleLookback ?? 250,
+  );
   // Signals are confirmed on COMPLETED candles only - the in-progress candle is dropped.
   const candles = completedCandles(raw, timeframe, now);
   if (candles.length === 0) return;
@@ -140,7 +147,13 @@ async function evaluatePair(
     if (evaluation.triggered) {
       summary.triggered++;
       deps.logger.info(
-        { ticker, timeframe, signal: def.name, candleTime: new Date(latest.time).toISOString(), message: evaluation.message },
+        {
+          ticker,
+          timeframe,
+          signal: def.name,
+          candleTime: new Date(latest.time).toISOString(),
+          message: evaluation.message,
+        },
         'signal triggered',
       );
       // Events BEFORE state: a crash in between just re-evaluates the candle next cycle,

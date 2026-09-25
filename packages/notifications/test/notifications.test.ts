@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ConsoleNotificationSender, RecordingNotificationSender, buildSignalNotification } from '../src';
+import {
+  ConsoleNotificationSender,
+  RecordingNotificationSender,
+  buildSignalNotification,
+} from '../src';
 
 describe('buildSignalNotification', () => {
   it('formats title/body and a deep link to the asset screen', () => {

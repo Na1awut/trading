@@ -42,7 +42,13 @@ export function buildEmaBullishCrossScenario(opts: {
   });
   const last = candles.at(-1)!;
   // In-progress candle: must be ignored by signal evaluation.
-  candles.push({ ...last, time: last.time + tf, open: last.close, close: round(last.close * 1.002), high: round(last.close * 1.003) });
+  candles.push({
+    ...last,
+    time: last.time + tf,
+    open: last.close,
+    close: round(last.close * 1.002),
+    high: round(last.close * 1.003),
+  });
   return candles;
 }
 

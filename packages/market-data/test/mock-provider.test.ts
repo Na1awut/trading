@@ -51,7 +51,7 @@ describe('MockMarketDataProvider', () => {
     const e21 = ema(closes, 21);
     let crosses = 0;
     for (let i = 22; i < closes.length; i++) {
-      if ((e9[i - 1]! <= e21[i - 1]!) !== (e9[i]! <= e21[i]!)) crosses++;
+      if (e9[i - 1]! <= e21[i - 1]! !== e9[i]! <= e21[i]!) crosses++;
     }
     expect(crosses).toBeGreaterThanOrEqual(4);
   });

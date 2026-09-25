@@ -1,5 +1,8 @@
 import type { FastifyError, FastifyInstance } from 'fastify';
-import { hasZodFastifySchemaValidationErrors, isResponseSerializationError } from 'fastify-type-provider-zod';
+import {
+  hasZodFastifySchemaValidationErrors,
+  isResponseSerializationError,
+} from 'fastify-type-provider-zod';
 import { ConflictError, DomainValidationError, NotFoundError } from '@signals/db';
 import { ProviderNotConfiguredError, UnknownSymbolError } from '@signals/market-data';
 
@@ -22,9 +25,16 @@ export function registerErrorHandler(app: FastifyInstance): void {
     if (hasZodFastifySchemaValidationErrors(err)) {
       statusCode = 400;
       message = err.validation
-        .map((v) => `${v.instancePath.replace(/^\//, '').replace(/\//g, '.') || err.validationContext}: ${v.message}`)
+        .map(
+          (v) =>
+            `${v.instancePath.replace(/^\//, '').replace(/\//g, '.') || err.validationContext}: ${v.message}`,
+        )
         .join('; ');
-    } else if (err instanceof NotFoundError || err instanceof ConflictError || err instanceof DomainValidationError) {
+    } else if (
+      err instanceof NotFoundError ||
+      err instanceof ConflictError ||
+      err instanceof DomainValidationError
+    ) {
       statusCode = err.statusCode;
       message = err.message;
     } else if (err instanceof UnknownSymbolError) {
@@ -36,7 +46,11 @@ export function registerErrorHandler(app: FastifyInstance): void {
       request.log.error({ err }, message);
     } else if (isResponseSerializationError(err)) {
       request.log.error({ err, cause: err.cause }, 'response serialization failed');
-    } else if (typeof err.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 500) {
+    } else if (
+      typeof err.statusCode === 'number' &&
+      err.statusCode >= 400 &&
+      err.statusCode < 500
+    ) {
       statusCode = err.statusCode;
       message = err.message;
     } else {
@@ -51,6 +65,10 @@ export function registerErrorHandler(app: FastifyInstance): void {
   });
 
   app.setNotFoundHandler((request, reply) => {
-    void reply.status(404).send({ statusCode: 404, error: 'Not Found', message: `Route ${request.method} ${request.url} not found` });
+    void reply.status(404).send({
+      statusCode: 404,
+      error: 'Not Found',
+      message: `Route ${request.method} ${request.url} not found`,
+    });
   });
 }

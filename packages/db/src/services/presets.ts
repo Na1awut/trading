@@ -26,18 +26,37 @@ export const PRESET_SIGNALS: PresetSpec[] = [
   { signalType: 'RSI_OVERSOLD', parameters: { period: 14, level: 30 }, enabledByDefault: false },
   { signalType: 'RSI_CROSS_UP', parameters: { period: 14, level: 30 }, enabledByDefault: true },
   { signalType: 'RSI_CROSS_DOWN', parameters: { period: 14, level: 70 }, enabledByDefault: true },
-  { signalType: 'MACD_BULLISH_CROSS', parameters: { fast: 12, slow: 26, signal: 9 }, enabledByDefault: true },
-  { signalType: 'MACD_BEARISH_CROSS', parameters: { fast: 12, slow: 26, signal: 9 }, enabledByDefault: true },
-  { signalType: 'VOLUME_SPIKE', parameters: { multiplier: 1.5, period: 20 }, enabledByDefault: false },
+  {
+    signalType: 'MACD_BULLISH_CROSS',
+    parameters: { fast: 12, slow: 26, signal: 9 },
+    enabledByDefault: true,
+  },
+  {
+    signalType: 'MACD_BEARISH_CROSS',
+    parameters: { fast: 12, slow: 26, signal: 9 },
+    enabledByDefault: true,
+  },
+  {
+    signalType: 'VOLUME_SPIKE',
+    parameters: { multiplier: 1.5, period: 20 },
+    enabledByDefault: false,
+  },
   { signalType: 'VOLUME_SPIKE', parameters: { multiplier: 2, period: 20 }, enabledByDefault: true },
   { signalType: 'VOLUME_ANOMALY', parameters: { period: 20, stdDevs: 3 }, enabledByDefault: false },
 ];
 
 export function canonicalParams(params: SignalParameters): string {
-  return JSON.stringify(Object.fromEntries(Object.entries(params).sort(([a], [b]) => a.localeCompare(b))));
+  return JSON.stringify(
+    Object.fromEntries(Object.entries(params).sort(([a], [b]) => a.localeCompare(b))),
+  );
 }
 
-export function presetKey(ticker: string, timeframe: Timeframe, type: SignalType, params: SignalParameters) {
+export function presetKey(
+  ticker: string,
+  timeframe: Timeframe,
+  type: SignalType,
+  params: SignalParameters,
+) {
   return `${ticker}:${timeframe}:${type}:${canonicalParams(params)}`;
 }
 

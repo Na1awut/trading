@@ -55,7 +55,11 @@ export class RealMarketDataProvider implements MarketDataProvider {
     throw this.notImplemented('getQuote');
   }
 
-  async getHistoricalCandles(_symbol: string, _timeframe: Timeframe, _limit: number): Promise<Candle[]> {
+  async getHistoricalCandles(
+    _symbol: string,
+    _timeframe: Timeframe,
+    _limit: number,
+  ): Promise<Candle[]> {
     throw this.notImplemented('getHistoricalCandles');
   }
 

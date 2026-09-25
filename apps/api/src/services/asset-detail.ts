@@ -19,7 +19,10 @@ export async function getAssetDetail(
     deps.marketData.getQuote(symbol),
     deps.marketData.getHistoricalCandles(symbol, timeframe, deps.config.SIGNAL_CANDLE_LOOKBACK),
     listSignalEvents(deps.prisma, userId, { ticker: symbol, limit: 10 }),
-    deps.prisma.watchlistItem.findFirst({ where: { symbol, watchlist: { userId } }, select: { id: true } }),
+    deps.prisma.watchlistItem.findFirst({
+      where: { symbol, watchlist: { userId } },
+      select: { id: true },
+    }),
   ]);
   const completed = completedCandles(candles, timeframe, now);
   const last = completed.at(-1);

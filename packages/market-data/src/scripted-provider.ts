@@ -18,7 +18,10 @@ export class ScriptedMarketDataProvider implements MarketDataProvider {
   constructor(private readonly now: () => number = Date.now) {}
 
   setCandles(symbol: string, timeframe: Timeframe, candles: Candle[]): this {
-    this.candles.set(`${symbol.toUpperCase()}:${timeframe}`, [...candles].sort((a, b) => a.time - b.time));
+    this.candles.set(
+      `${symbol.toUpperCase()}:${timeframe}`,
+      [...candles].sort((a, b) => a.time - b.time),
+    );
     return this;
   }
 
@@ -55,7 +58,11 @@ export class ScriptedMarketDataProvider implements MarketDataProvider {
     };
   }
 
-  async getHistoricalCandles(symbol: string, timeframe: Timeframe, limit: number): Promise<Candle[]> {
+  async getHistoricalCandles(
+    symbol: string,
+    timeframe: Timeframe,
+    limit: number,
+  ): Promise<Candle[]> {
     const series = this.candles.get(`${symbol.toUpperCase()}:${timeframe}`);
     if (!series) {
       if (!this.assets.has(symbol.toUpperCase())) throw new UnknownSymbolError(symbol);

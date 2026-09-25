@@ -1,4 +1,10 @@
-const CURRENCY_SYMBOLS: Record<string, string> = { USD: '$', THB: '฿', EUR: '€', GBP: '£', JPY: '¥' };
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: '$',
+  THB: '฿',
+  EUR: '€',
+  GBP: '£',
+  JPY: '¥',
+};
 
 export function formatPrice(value: number, currency = 'USD'): string {
   const symbol = CURRENCY_SYMBOLS[currency] ?? '';

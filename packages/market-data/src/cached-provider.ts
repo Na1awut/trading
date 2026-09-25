@@ -31,7 +31,9 @@ export class CachedMarketDataProvider implements MarketDataProvider {
   }
 
   searchAssets(query: string, limit?: number): Promise<AssetInfo[]> {
-    return this.memo(`search:${query}:${limit}`, 60_000, () => this.inner.searchAssets(query, limit));
+    return this.memo(`search:${query}:${limit}`, 60_000, () =>
+      this.inner.searchAssets(query, limit),
+    );
   }
 
   getAsset(symbol: string): Promise<AssetInfo | null> {

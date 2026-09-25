@@ -1,6 +1,12 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { createCustomSignal, deleteSignal, listUserSignals, updateSignal, upsertAsset } from '@signals/db';
+import {
+  createCustomSignal,
+  deleteSignal,
+  listUserSignals,
+  updateSignal,
+  upsertAsset,
+} from '@signals/db';
 import { UnknownSymbolError } from '@signals/market-data';
 import { signalCatalog } from '@signals/signal-engine';
 import {

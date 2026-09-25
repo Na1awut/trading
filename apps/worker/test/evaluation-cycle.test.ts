@@ -8,7 +8,11 @@ import {
   updateSettings,
 } from '@signals/db';
 import { resetDatabase, testDatabaseUrl } from '@signals/db/testing';
-import { MOCK_ASSETS, MockMarketDataProvider, ScriptedMarketDataProvider } from '@signals/market-data';
+import {
+  MOCK_ASSETS,
+  MockMarketDataProvider,
+  ScriptedMarketDataProvider,
+} from '@signals/market-data';
 import { RecordingNotificationSender } from '@signals/notifications';
 import { timeframeToMs, type Candle } from '@signals/types';
 import { runEvaluationCycle } from '../src/evaluation-cycle';
@@ -33,11 +37,18 @@ async function user(email: string, { device = true } = {}) {
   await addToWatchlist(prisma, { userId: u.id, asset: NVDA, timeframe: TF });
   // First deliverable: only the EMA 9/21 bullish preset, so assertions are exact.
   await prisma.signalSubscription.updateMany({
-    where: { userId: u.id, signalDefinition: { NOT: { signalType: 'EMA_BULLISH_CROSS', name: 'EMA 9/21 Bullish Cross' } } },
+    where: {
+      userId: u.id,
+      signalDefinition: {
+        NOT: { signalType: 'EMA_BULLISH_CROSS', name: 'EMA 9/21 Bullish Cross' },
+      },
+    },
     data: { enabled: false },
   });
   if (device) {
-    await prisma.device.create({ data: { userId: u.id, token: `token-${email}`, platform: 'android' } });
+    await prisma.device.create({
+      data: { userId: u.id, token: `token-${email}`, platform: 'android' },
+    });
   }
   return u;
 }
@@ -56,7 +67,14 @@ describe('vertical slice: add NVDA -> EMA 9/21 bullish cross -> event -> notific
     const crossCandle = candles.at(-2)!; // last COMPLETED candle
 
     const summary = await cycle(scripted(candles));
-    expect(summary).toMatchObject({ pairs: 1, evaluated: 1, triggered: 1, eventsCreated: 1, notificationsSent: 1, errors: 0 });
+    expect(summary).toMatchObject({
+      pairs: 1,
+      evaluated: 1,
+      triggered: 1,
+      eventsCreated: 1,
+      notificationsSent: 1,
+      errors: 0,
+    });
 
     const [event] = await listSignalEvents(prisma, alice.id);
     expect(event).toMatchObject({
@@ -77,7 +95,12 @@ describe('vertical slice: add NVDA -> EMA 9/21 bullish cross -> event -> notific
     expect(notifier.sent[0]!.message).toEqual({
       title: 'NVDA — EMA Bullish Cross',
       body: `EMA 9 crossed above EMA 21 at $${crossCandle.close.toFixed(2)} (5m)`,
-      data: { type: 'signal', eventId: event!.id, ticker: 'NVDA', url: 'stocksignals://asset/NVDA' },
+      data: {
+        type: 'signal',
+        eventId: event!.id,
+        ticker: 'NVDA',
+        url: 'stocksignals://asset/NVDA',
+      },
     });
 
     const state = await prisma.signalState.findFirstOrThrow();
@@ -118,7 +141,13 @@ describe('duplicate alert prevention', () => {
     const last = candles.at(-2)!;
     const continued = [
       ...candles.slice(0, -1),
-      { ...last, time: last.time + timeframeToMs(TF), open: last.close, close: last.close + 0.6, high: last.close + 0.7 },
+      {
+        ...last,
+        time: last.time + timeframeToMs(TF),
+        open: last.close,
+        close: last.close + 0.6,
+        high: last.close + 0.7,
+      },
     ];
     const summary = await runEvaluationCycle({
       prisma,
@@ -137,7 +166,12 @@ describe('duplicate alert prevention', () => {
     await cycle(provider);
     await prisma.signalState.deleteMany(); // simulate lost state / crash before state write
     const again = await cycle(provider);
-    expect(again).toMatchObject({ triggered: 1, eventsCreated: 0, duplicatesSkipped: 1, notificationsSent: 0 });
+    expect(again).toMatchObject({
+      triggered: 1,
+      eventsCreated: 0,
+      duplicatesSkipped: 1,
+      notificationsSent: 0,
+    });
     expect(await prisma.signalEvent.count()).toBe(1);
     expect(notifier.sent).toHaveLength(1);
   });
@@ -156,8 +190,15 @@ describe('fan-out and notification settings', () => {
   it('evaluates a shared preset once and notifies every subscriber', async () => {
     await user('alice@example.com');
     await user('bob@example.com');
-    const summary = await cycle(scripted(buildEmaBullishCrossScenario({ now: NOW, timeframe: TF })));
-    expect(summary).toMatchObject({ evaluated: 1, triggered: 1, eventsCreated: 2, notificationsSent: 2 });
+    const summary = await cycle(
+      scripted(buildEmaBullishCrossScenario({ now: NOW, timeframe: TF })),
+    );
+    expect(summary).toMatchObject({
+      evaluated: 1,
+      triggered: 1,
+      eventsCreated: 2,
+      notificationsSent: 2,
+    });
     expect(notifier.sent.map((s) => s.targets[0]!.token).sort()).toEqual([
       'token-alice@example.com',
       'token-bob@example.com',
@@ -173,7 +214,10 @@ describe('fan-out and notification settings', () => {
     await updateSettings(prisma, c.id, { disabledCategories: ['MOVING_AVERAGE'] });
 
     await cycle(scripted(buildEmaBullishCrossScenario({ now: NOW, timeframe: TF })));
-    const events = await prisma.signalEvent.findMany({ include: { user: true }, orderBy: { user: { email: 'asc' } } });
+    const events = await prisma.signalEvent.findMany({
+      include: { user: true },
+      orderBy: { user: { email: 'asc' } },
+    });
     expect(events.map((e) => [e.user.email, e.deliveryStatus, e.deliveryError])).toEqual([
       ['category@example.com', 'SUPPRESSED', 'MOVING_AVERAGE alerts disabled'],
       ['global@example.com', 'SUPPRESSED', 'alerts disabled globally'],
@@ -184,8 +228,13 @@ describe('fan-out and notification settings', () => {
 
   it('does not evaluate or record signals whose subscription is disabled', async () => {
     const a = await user('alice@example.com');
-    await prisma.signalSubscription.updateMany({ where: { userId: a.id }, data: { enabled: false } });
-    const summary = await cycle(scripted(buildEmaBullishCrossScenario({ now: NOW, timeframe: TF })));
+    await prisma.signalSubscription.updateMany({
+      where: { userId: a.id },
+      data: { enabled: false },
+    });
+    const summary = await cycle(
+      scripted(buildEmaBullishCrossScenario({ now: NOW, timeframe: TF })),
+    );
     expect(summary.pairs).toBe(0);
     expect(await prisma.signalEvent.count()).toBe(0);
   });
@@ -208,11 +257,20 @@ describe('fan-out and notification settings', () => {
 describe('robustness', () => {
   it('a failing symbol does not stop other pairs', async () => {
     const alice = await user('alice@example.com');
-    await addToWatchlist(prisma, { userId: alice.id, asset: MOCK_ASSETS.find((a) => a.symbol === 'AAPL')!, timeframe: TF });
+    await addToWatchlist(prisma, {
+      userId: alice.id,
+      asset: MOCK_ASSETS.find((a) => a.symbol === 'AAPL')!,
+      timeframe: TF,
+    });
     const provider = scripted(buildEmaBullishCrossScenario({ now: NOW, timeframe: TF }));
     provider.getHistoricalCandles = async (symbol, tf, limit) => {
       if (symbol === 'AAPL') throw new Error('vendor timeout');
-      return ScriptedMarketDataProvider.prototype.getHistoricalCandles.call(provider, symbol, tf, limit);
+      return ScriptedMarketDataProvider.prototype.getHistoricalCandles.call(
+        provider,
+        symbol,
+        tf,
+        limit,
+      );
     };
     const summary = await cycle(provider);
     expect(summary.errors).toBe(1);
@@ -221,7 +279,10 @@ describe('robustness', () => {
 
   it('runs every enabled preset against deterministic mock data without errors', async () => {
     const alice = await user('alice@example.com');
-    await prisma.signalSubscription.updateMany({ where: { userId: alice.id }, data: { enabled: true } });
+    await prisma.signalSubscription.updateMany({
+      where: { userId: alice.id },
+      data: { enabled: true },
+    });
     const summary = await cycle(new MockMarketDataProvider({ now: () => NOW }));
     expect(summary).toMatchObject({ pairs: 1, evaluated: 15, errors: 0 });
     expect(await prisma.marketCandle.count()).toBe(249);

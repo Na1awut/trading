@@ -61,7 +61,11 @@ export class FcmNotificationSender implements NotificationSender {
     const fcmTargets = targets.filter((t) => t.provider === 'FCM');
     const skipped: SendResult[] = targets
       .filter((t) => t.provider !== 'FCM')
-      .map((t) => ({ token: t.token, success: false, error: `provider ${t.provider} not supported by FCM sender` }));
+      .map((t) => ({
+        token: t.token,
+        success: false,
+        error: `provider ${t.provider} not supported by FCM sender`,
+      }));
     if (fcmTargets.length === 0) return skipped;
 
     const messages: Message[] = fcmTargets.map((t) => ({

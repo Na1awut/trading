@@ -3,14 +3,14 @@ import { dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
 import { TimeframeSchema } from '@signals/types';
 
-const bool = z
-  .enum(['true', 'false', '1', '0'])
-  .transform((v) => v === 'true' || v === '1');
+const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1');
 
 const EnvSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-    LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+    LOG_LEVEL: z
+      .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
+      .default('info'),
 
     DATABASE_URL: z.string().url(),
 
@@ -51,10 +51,18 @@ const EnvSchema = z
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
       if (env.AUTH_MODE === 'dev') {
-        ctx.addIssue({ code: 'custom', path: ['AUTH_MODE'], message: 'AUTH_MODE=dev is not allowed in production' });
+        ctx.addIssue({
+          code: 'custom',
+          path: ['AUTH_MODE'],
+          message: 'AUTH_MODE=dev is not allowed in production',
+        });
       }
       if (env.CORS_ORIGINS.trim() === '*') {
-        ctx.addIssue({ code: 'custom', path: ['CORS_ORIGINS'], message: 'Set explicit CORS origins in production' });
+        ctx.addIssue({
+          code: 'custom',
+          path: ['CORS_ORIGINS'],
+          message: 'Set explicit CORS origins in production',
+        });
       }
     }
     const needsFirebase = env.AUTH_MODE === 'firebase' || env.NOTIFICATION_DRIVER === 'fcm';
@@ -62,11 +70,16 @@ const EnvSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['FIREBASE_PROJECT_ID'],
-        message: 'FIREBASE_PROJECT_ID is required when AUTH_MODE=firebase or NOTIFICATION_DRIVER=fcm',
+        message:
+          'FIREBASE_PROJECT_ID is required when AUTH_MODE=firebase or NOTIFICATION_DRIVER=fcm',
       });
     }
     if (env.MARKET_DATA_PROVIDER === 'real' && !env.MARKET_DATA_API_KEY) {
-      ctx.addIssue({ code: 'custom', path: ['MARKET_DATA_API_KEY'], message: 'Required when MARKET_DATA_PROVIDER=real' });
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MARKET_DATA_API_KEY'],
+        message: 'Required when MARKET_DATA_PROVIDER=real',
+      });
     }
   });
 
@@ -82,7 +95,9 @@ export class ConfigError extends Error {
 /** Parse and validate configuration. Pure - pass `process.env` or a test object. */
 export function parseConfig(env: Record<string, string | undefined>): AppConfig {
   // Treat empty strings as unset so `.env` placeholders like `FOO=` behave.
-  const cleaned = Object.fromEntries(Object.entries(env).filter(([, v]) => v !== undefined && v !== ''));
+  const cleaned = Object.fromEntries(
+    Object.entries(env).filter(([, v]) => v !== undefined && v !== ''),
+  );
   const result = EnvSchema.safeParse(cleaned);
   if (!result.success) {
     throw new ConfigError(result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`));

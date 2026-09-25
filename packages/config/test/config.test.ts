@@ -30,14 +30,18 @@ describe('parseConfig', () => {
   });
 
   it('requires Firebase project id for firebase auth / FCM', () => {
-    expect(() => parseConfig({ ...base, NOTIFICATION_DRIVER: 'fcm' })).toThrow(/FIREBASE_PROJECT_ID/);
-    expect(parseConfig({ ...base, AUTH_MODE: 'firebase', FIREBASE_PROJECT_ID: 'p' }).AUTH_MODE).toBe(
-      'firebase',
+    expect(() => parseConfig({ ...base, NOTIFICATION_DRIVER: 'fcm' })).toThrow(
+      /FIREBASE_PROJECT_ID/,
     );
+    expect(
+      parseConfig({ ...base, AUTH_MODE: 'firebase', FIREBASE_PROJECT_ID: 'p' }).AUTH_MODE,
+    ).toBe('firebase');
   });
 
   it('requires an API key for the real market data provider', () => {
-    expect(() => parseConfig({ ...base, MARKET_DATA_PROVIDER: 'real' })).toThrow(/MARKET_DATA_API_KEY/);
+    expect(() => parseConfig({ ...base, MARKET_DATA_PROVIDER: 'real' })).toThrow(
+      /MARKET_DATA_API_KEY/,
+    );
   });
 
   it('rejects a missing DATABASE_URL', () => {

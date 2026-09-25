@@ -18,7 +18,9 @@ export function getFirebaseAdminApp(options: FirebaseAdminOptions): App {
 
   let credential;
   if (options.serviceAccountBase64) {
-    credential = cert(JSON.parse(Buffer.from(options.serviceAccountBase64, 'base64').toString('utf8')));
+    credential = cert(
+      JSON.parse(Buffer.from(options.serviceAccountBase64, 'base64').toString('utf8')),
+    );
   } else if (options.serviceAccountPath) {
     credential = cert(JSON.parse(readFileSync(options.serviceAccountPath, 'utf8')));
   } else {

@@ -1,5 +1,9 @@
 import { Prisma, type PrismaClient, type SignalDefinition } from '@signals/db';
-import { buildSignalNotification, type Logger, type NotificationSender } from '@signals/notifications';
+import {
+  buildSignalNotification,
+  type Logger,
+  type NotificationSender,
+} from '@signals/notifications';
 import type { SignalEvaluation } from '@signals/signal-engine';
 
 export interface FanOutResult {
@@ -23,7 +27,8 @@ export async function fanOutSignal(
 ): Promise<FanOutResult> {
   const { prisma, notifier, logger } = deps;
   const result: FanOutResult = { created: 0, duplicates: 0, notificationsSent: 0 };
-  if (!evaluation.triggered || evaluation.candleTime === null || evaluation.price === null) return result;
+  if (!evaluation.triggered || evaluation.candleTime === null || evaluation.price === null)
+    return result;
 
   const subs = await prisma.signalSubscription.findMany({
     where: { signalDefinitionId: def.id, enabled: true },
@@ -90,7 +95,10 @@ export async function fanOutSignal(
 
     const userDevices = devices.filter((d) => d.userId === userId);
     if (userDevices.length === 0) {
-      await prisma.signalEvent.update({ where: { id: eventId }, data: { deliveryStatus: 'NO_DEVICES' } });
+      await prisma.signalEvent.update({
+        where: { id: eventId },
+        data: { deliveryStatus: 'NO_DEVICES' },
+      });
       continue;
     }
 
@@ -116,7 +124,14 @@ export async function fanOutSignal(
         where: { id: eventId },
         data: ok
           ? { deliveryStatus: 'SENT', deliveredAt: new Date() }
-          : { deliveryStatus: 'FAILED', deliveryError: sends.map((r) => r.error).filter(Boolean).join('; ').slice(0, 500) },
+          : {
+              deliveryStatus: 'FAILED',
+              deliveryError: sends
+                .map((r) => r.error)
+                .filter(Boolean)
+                .join('; ')
+                .slice(0, 500),
+            },
       });
       if (ok) result.notificationsSent++;
     } catch (err) {
