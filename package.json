@@ -1,0 +1,44 @@
+{
+  "name": "stock-signal-alerts",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Stock signal alerts MVP - informational/educational use only, not investment advice.",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @signals/api --filter @signals/worker dev",
+    "dev:api": "pnpm --filter @signals/api dev",
+    "dev:worker": "pnpm --filter @signals/worker dev",
+    "dev:mobile": "pnpm --filter @signals/mobile start",
+    "build": "pnpm -r --filter \"./packages/**\" --filter @signals/api --filter @signals/worker build",
+    "test": "vitest run",
+    "test:unit": "vitest run --project signal-engine --project market-data --project config --project notifications",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r typecheck",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:generate": "pnpm --filter @signals/db generate",
+    "db:migrate": "pnpm --filter @signals/db migrate:dev",
+    "db:deploy": "pnpm --filter @signals/db migrate:deploy",
+    "db:seed": "pnpm --filter @signals/db seed",
+    "db:studio": "pnpm --filter @signals/db studio",
+    "demo:slice": "pnpm --filter @signals/worker demo:slice"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^22.18.0",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.4.0",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.6",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.46.0",
+    "vitest": "^3.2.4"
+  }
+}

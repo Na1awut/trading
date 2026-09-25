@@ -1,0 +1,22 @@
+node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+.DS_Store
+
+# Secrets - never commit
+**/service-account*.json
+**/firebase-adminsdk*.json
+google-services.json
+GoogleService-Info.plist
+
+# Expo / RN
+apps/mobile/.expo/
+apps/mobile/dist/
+apps/mobile/android/
+apps/mobile/ios/
+apps/mobile/web-build/
