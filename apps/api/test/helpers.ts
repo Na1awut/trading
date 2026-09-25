@@ -1,16 +1,19 @@
 import { parseConfig } from '@signals/config';
 import { createPrismaClient } from '@signals/db';
 import { resetDatabase, testDatabaseUrl } from '@signals/db/testing';
-import { MockMarketDataProvider } from '@signals/market-data';
+import { MockMarketDataProvider, type MarketDataProvider } from '@signals/market-data';
 import { RecordingNotificationSender } from '@signals/notifications';
 import { buildApp } from '../src/app';
-import { DevAuthVerifier } from '../src/plugins/auth';
+import { DevAuthVerifier, type AuthVerifier } from '../src/plugins/auth';
 
 export const NOW = Date.UTC(2026, 8, 25, 14, 37, 30);
 export const DATABASE_URL = testDatabaseUrl('api_test');
 export const prisma = createPrismaClient(DATABASE_URL);
 
-export async function makeApp(env: Record<string, string> = {}) {
+export async function makeApp(
+  env: Record<string, string> = {},
+  overrides: { marketData?: MarketDataProvider; authVerifier?: AuthVerifier } = {},
+) {
   const notifier = new RecordingNotificationSender();
   const app = await buildApp(
     {
@@ -22,9 +25,9 @@ export async function makeApp(env: Record<string, string> = {}) {
         ...env,
       }),
       prisma,
-      marketData: new MockMarketDataProvider({ now: () => NOW }),
+      marketData: overrides.marketData ?? new MockMarketDataProvider({ now: () => NOW }),
       notifier,
-      authVerifier: new DevAuthVerifier(),
+      authVerifier: overrides.authVerifier ?? new DevAuthVerifier(),
       now: () => NOW,
     },
     { logger: false },

@@ -1,7 +1,11 @@
 import { listSignalEvents } from '@signals/db';
 import { completedCandles, computeIndicatorSnapshot } from '@signals/signal-engine';
 import type { AssetDetail, Timeframe } from '@signals/types';
-import { UnknownSymbolError } from '@signals/market-data';
+import {
+  UnknownSymbolError,
+  assessCandleFreshness,
+  assessQuoteFreshness,
+} from '@signals/market-data';
 import type { AppDeps } from '../deps';
 
 /** Assemble the asset detail view. All indicator math happens here, server-side. */
@@ -24,7 +28,8 @@ export async function getAssetDetail(
       select: { id: true },
     }),
   ]);
-  const completed = completedCandles(candles, timeframe, now);
+  // Strict: only fully closed candles (incl. vendor grace period) feed the indicators.
+  const completed = completedCandles(candles, timeframe, now, deps.config.CANDLE_CLOSE_GRACE_MS);
   const last = completed.at(-1);
 
   return {
@@ -33,6 +38,13 @@ export async function getAssetDetail(
     timeframe,
     indicatorsAsOf: last ? new Date(last.time).toISOString() : null,
     indicators: computeIndicatorSnapshot(completed),
+    dataStatus: {
+      quote: assessQuoteFreshness(quote, now, deps.config.MARKET_DATA_STALE_QUOTE_MS),
+      candles: assessCandleFreshness(completed, timeframe, now, {
+        graceMs: deps.config.CANDLE_CLOSE_GRACE_MS,
+        marketOpen: quote.marketOpen,
+      }),
+    },
     inWatchlist: watchItem !== null,
     recentEvents,
   };

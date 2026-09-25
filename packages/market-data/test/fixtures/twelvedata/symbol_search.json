@@ -1,0 +1,59 @@
+{
+  "data": [
+    {
+      "symbol": "NVDA",
+      "instrument_name": "NVIDIA Corp",
+      "exchange": "NASDAQ",
+      "mic_code": "XNGS",
+      "exchange_timezone": "America/New_York",
+      "instrument_type": "Common Stock",
+      "country": "United States",
+      "currency": "USD"
+    },
+    {
+      "symbol": "NVDA",
+      "instrument_name": "NVIDIA Corp",
+      "exchange": "XETR",
+      "mic_code": "XETR",
+      "exchange_timezone": "Europe/Berlin",
+      "instrument_type": "Common Stock",
+      "country": "Germany",
+      "currency": "EUR"
+    },
+    {
+      "symbol": "NVDL",
+      "instrument_name": "GraniteShares 2x Long NVDA Daily ETF",
+      "exchange": "NASDAQ",
+      "mic_code": "XNMS",
+      "exchange_timezone": "America/New_York",
+      "instrument_type": "ETF",
+      "country": "United States",
+      "currency": "USD"
+    },
+    {
+      "symbol": "PTT",
+      "instrument_name": "PTT Public Company Limited",
+      "exchange": "SET",
+      "mic_code": "XBKK",
+      "exchange_timezone": "Asia/Bangkok",
+      "instrument_type": "Common Stock",
+      "country": "Thailand",
+      "currency": "THB"
+    },
+    {
+      "symbol": "BTC/USD",
+      "instrument_name": "Bitcoin US Dollar",
+      "exchange": "Coinbase Pro",
+      "instrument_type": "Digital Currency",
+      "currency": "USD"
+    },
+    {
+      "symbol": "NVDAX",
+      "instrument_name": "Some Mutual Fund",
+      "exchange": "NASDAQ",
+      "instrument_type": "Mutual Fund",
+      "currency": "USD"
+    }
+  ],
+  "status": "ok"
+}

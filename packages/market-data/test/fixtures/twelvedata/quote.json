@@ -1,0 +1,19 @@
+{
+  "symbol": "NVDA",
+  "name": "NVIDIA Corp",
+  "exchange": "NASDAQ",
+  "mic_code": "XNGS",
+  "currency": "USD",
+  "datetime": "2026-09-25",
+  "timestamp": 1790344800,
+  "open": "180.10000",
+  "high": "183.20000",
+  "low": "179.55000",
+  "close": "182.30000",
+  "volume": "61200000",
+  "previous_close": "179.75000",
+  "change": "2.55000",
+  "percent_change": "1.41863",
+  "average_volume": "38500000",
+  "is_market_open": true
+}

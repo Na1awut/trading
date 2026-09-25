@@ -228,6 +228,9 @@ importers:
       '@signals/types':
         specifier: workspace:*
         version: link:../types
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
     devDependencies:
       '@signals/signal-engine':
         specifier: workspace:*

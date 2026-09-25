@@ -27,14 +27,17 @@ export const assetRoutes: FastifyPluginAsyncZod<AppDeps> = async (app, deps) => 
   app.get(
     '/assets/search',
     {
+      // Search hits the vendor (credits); keep it well under the global limit.
+      config: { rateLimit: { max: 30, timeWindow: 60_000 } },
       schema: {
         tags: ['assets'],
         summary: 'Search ticker symbols / names',
+        description: 'Results are cached; each uncached search costs vendor API credits.',
         querystring: AssetSearchQuerySchema,
         response: { 200: z.object({ results: z.array(AssetInfoSchema) }) },
       },
     },
-    async (req) => ({ results: await deps.marketData.searchAssets(req.query.q, 20) }),
+    async (req) => ({ results: await deps.marketData.searchSymbols(req.query.q, 20) }),
   );
 
   app.get(

@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "symbol": "PTT",
+    "interval": "1day",
+    "currency": "THB",
+    "exchange_timezone": "Asia/Bangkok",
+    "exchange": "SET",
+    "type": "Common Stock"
+  },
+  "values": [
+    {
+      "datetime": "2026-09-24",
+      "open": "33.00",
+      "high": "33.50",
+      "low": "32.75",
+      "close": "33.25",
+      "volume": "25000000"
+    },
+    {
+      "datetime": "2026-09-25",
+      "open": "33.25",
+      "high": "33.75",
+      "low": "33.00",
+      "close": "33.50",
+      "volume": "27000000"
+    }
+  ],
+  "status": "ok"
+}

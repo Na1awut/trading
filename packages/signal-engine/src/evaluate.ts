@@ -21,13 +21,17 @@ export function detectTransition(previous: boolean | null, current: boolean | nu
   return previous === false && current === true;
 }
 
-/** Keep only candles whose interval has fully elapsed. Input must be sorted ascending. */
-export function completedCandles(
-  candles: ReadonlyArray<Candle>,
+/**
+ * Keep only candles whose interval has fully elapsed (plus `graceMs` for vendor publish
+ * lag). Signals are never evaluated on an in-progress candle. Input sorted ascending.
+ */
+export function completedCandles<C extends Candle>(
+  candles: ReadonlyArray<C>,
   timeframe: Timeframe,
   nowMs: number,
-): Candle[] {
-  return candles.filter((c) => isCandleComplete(c, timeframe, nowMs));
+  graceMs = 0,
+): C[] {
+  return candles.filter((c) => isCandleComplete(c, timeframe, nowMs, graceMs));
 }
 
 export interface EvaluateSignalInput {

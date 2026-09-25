@@ -1,0 +1,5 @@
+{
+  "code": 400,
+  "message": "**symbol** not found: ZZZZ. Please specify it correctly according to API Documentation.",
+  "status": "error"
+}

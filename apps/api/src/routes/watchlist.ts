@@ -6,8 +6,7 @@ import {
   removeFromWatchlist,
   setTickerAlerts,
 } from '@signals/db';
-import type { MarketDataProvider } from '@signals/market-data';
-import { UnknownSymbolError } from '@signals/market-data';
+import { MarketDataError, UnknownSymbolError, assessQuoteFreshness } from '@signals/market-data';
 import {
   AddWatchlistItemBodySchema,
   SymbolSchema,
@@ -19,16 +18,26 @@ import {
 import type { AppDeps } from '../deps';
 
 type ItemWithAsset = Awaited<ReturnType<typeof listWatchlistItems>>[number];
+type QuoteResult = { quote: Quote | null; error: string | null };
 
-async function safeQuote(provider: MarketDataProvider, symbol: string): Promise<Quote | null> {
+/** One failing symbol (or a vendor outage) must not break the whole watchlist. */
+async function safeQuote(deps: AppDeps, symbol: string): Promise<QuoteResult> {
   try {
-    return await provider.getQuote(symbol);
-  } catch {
-    return null; // one bad symbol must not break the whole watchlist
+    return { quote: await deps.marketData.getQuote(symbol), error: null };
+  } catch (err) {
+    const code = err instanceof MarketDataError ? err.code : 'UNKNOWN';
+    return {
+      quote: null,
+      error:
+        code === 'RATE_LIMITED'
+          ? 'Price temporarily unavailable (rate limited)'
+          : 'Price unavailable',
+    };
   }
 }
 
-function toDTO(item: ItemWithAsset, quote: Quote | null): WatchlistItem {
+function toDTO(deps: AppDeps, item: ItemWithAsset, { quote, error }: QuoteResult): WatchlistItem {
+  const now = deps.now?.() ?? Date.now();
   return {
     symbol: item.symbol,
     name: item.asset.name,
@@ -38,6 +47,10 @@ function toDTO(item: ItemWithAsset, quote: Quote | null): WatchlistItem {
     alertsEnabled: item.alertsEnabled,
     addedAt: item.addedAt.toISOString(),
     quote,
+    dataStatus: quote
+      ? assessQuoteFreshness(quote, now, deps.config.MARKET_DATA_STALE_QUOTE_MS)
+      : null,
+    quoteError: error,
   };
 }
 
@@ -55,8 +68,8 @@ export const watchlistRoutes: FastifyPluginAsyncZod<AppDeps> = async (app, deps)
     },
     async (req) => {
       const items = await listWatchlistItems(deps.prisma, req.user.id);
-      const quotes = await Promise.all(items.map((i) => safeQuote(deps.marketData, i.symbol)));
-      return { items: items.map((item, k) => toDTO(item, quotes[k] ?? null)) };
+      const quotes = await Promise.all(items.map((i) => safeQuote(deps, i.symbol)));
+      return { items: items.map((item, k) => toDTO(deps, item, quotes[k]!)) };
     },
   );
 
@@ -83,7 +96,7 @@ export const watchlistRoutes: FastifyPluginAsyncZod<AppDeps> = async (app, deps)
       });
       return reply
         .status(created ? 201 : 200)
-        .send({ item: toDTO(item, await safeQuote(deps.marketData, item.symbol)) });
+        .send({ item: toDTO(deps, item, await safeQuote(deps, item.symbol)) });
     },
   );
 

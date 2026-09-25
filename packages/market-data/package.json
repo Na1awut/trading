@@ -13,7 +13,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@signals/types": "workspace:*"
+    "@signals/types": "workspace:*",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@signals/signal-engine": "workspace:*"

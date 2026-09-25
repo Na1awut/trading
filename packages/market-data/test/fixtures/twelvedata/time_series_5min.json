@@ -1,0 +1,38 @@
+{
+  "meta": {
+    "symbol": "NVDA",
+    "interval": "5min",
+    "currency": "USD",
+    "exchange_timezone": "America/New_York",
+    "exchange": "NASDAQ",
+    "mic_code": "XNGS",
+    "type": "Common Stock"
+  },
+  "values": [
+    {
+      "datetime": "2026-09-25 14:40:00",
+      "open": "182.10",
+      "high": "182.40",
+      "low": "182.00",
+      "close": "182.30",
+      "volume": "410000"
+    },
+    {
+      "datetime": "2026-09-25 14:35:00",
+      "open": "181.90",
+      "high": "182.20",
+      "low": "181.80",
+      "close": "182.10",
+      "volume": "385000"
+    },
+    {
+      "datetime": "2026-09-25 14:30:00",
+      "open": "181.70",
+      "high": "182.00",
+      "low": "181.60",
+      "close": "181.90",
+      "volume": "402000"
+    }
+  ],
+  "status": "ok"
+}

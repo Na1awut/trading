@@ -1,4 +1,5 @@
 import Fastify, { type FastifyBaseLogger } from 'fastify';
+import { pino } from 'pino';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
@@ -10,6 +11,7 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
+import { parseTrustProxy } from '@signals/config';
 import { DISCLAIMER } from '@signals/types';
 import type { AppDeps } from './deps';
 import { createAuthenticateHook } from './plugins/auth';
@@ -24,11 +26,11 @@ import { watchlistRoutes } from './routes/watchlist';
 
 export async function buildApp(deps: AppDeps, opts: { logger?: FastifyBaseLogger | false } = {}) {
   const { config } = deps;
+  const logger: FastifyBaseLogger =
+    opts.logger || pino({ level: opts.logger === false ? 'silent' : config.LOG_LEVEL });
   const app = Fastify({
-    ...(opts.logger
-      ? { loggerInstance: opts.logger }
-      : { logger: opts.logger ?? { level: config.LOG_LEVEL } }),
-    trustProxy: true,
+    loggerInstance: logger,
+    trustProxy: parseTrustProxy(config.TRUST_PROXY),
     bodyLimit: 64 * 1024,
   }).withTypeProvider<ZodTypeProvider>();
 
@@ -52,7 +54,7 @@ export async function buildApp(deps: AppDeps, opts: { logger?: FastifyBaseLogger
     keyGenerator: (req) => req.headers.authorization ?? req.ip,
   });
 
-  if (config.ENABLE_SWAGGER) {
+  if (config.ENABLE_API_DOCS) {
     await app.register(swagger, {
       openapi: {
         info: {

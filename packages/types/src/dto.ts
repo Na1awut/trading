@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   AssetClassSchema,
   AssetInfoSchema,
+  DataFreshnessSchema,
   QuoteSchema,
   SymbolSchema,
   TimeframeSchema,
@@ -24,6 +25,10 @@ export const WatchlistItemSchema = z.object({
   alertsEnabled: z.boolean(),
   addedAt: z.string(),
   quote: QuoteSchema.nullable(),
+  /** Freshness of `quote`; null when the quote could not be loaded. */
+  dataStatus: DataFreshnessSchema.nullable(),
+  /** Set when the quote failed to load (e.g. vendor outage) - the rest of the list still works. */
+  quoteError: z.string().nullable(),
 });
 export type WatchlistItem = z.infer<typeof WatchlistItemSchema>;
 
@@ -81,6 +86,8 @@ export const AssetDetailSchema = z.object({
   /** Open time of the last COMPLETED candle the indicators were calculated on. */
   indicatorsAsOf: z.string().nullable(),
   indicators: IndicatorSnapshotSchema,
+  /** Staleness of the quote and of the candle series the indicators use. */
+  dataStatus: z.object({ quote: DataFreshnessSchema, candles: DataFreshnessSchema }),
   inWatchlist: z.boolean(),
   recentEvents: z.array(SignalEventSchema),
 });

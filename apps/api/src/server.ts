@@ -21,7 +21,17 @@ async function main() {
       vendor: config.MARKET_DATA_VENDOR,
       apiKey: config.MARKET_DATA_API_KEY,
       baseUrl: config.MARKET_DATA_BASE_URL,
+      allowCustomBaseUrl: config.MARKET_DATA_ALLOW_CUSTOM_BASE_URL,
+      delayed: config.MARKET_DATA_DELAYED,
+      timeoutMs: config.MARKET_DATA_TIMEOUT_MS,
+      maxRetries: config.MARKET_DATA_MAX_RETRIES,
+      requestsPerMinute: config.MARKET_DATA_RATE_LIMIT_PER_MINUTE,
+      logger: logger.child({ component: 'market-data' }),
     }),
+    {
+      quoteTtlMs: config.MARKET_DATA_QUOTE_TTL_MS,
+      candleCloseGraceMs: config.CANDLE_CLOSE_GRACE_MS,
+    },
   );
   const authVerifier =
     config.AUTH_MODE === 'firebase'

@@ -8,10 +8,10 @@ describe('MockMarketDataProvider', () => {
   const provider = new MockMarketDataProvider({ now: () => NOW });
 
   it('searches by symbol and name, exact matches first', async () => {
-    const res = await provider.searchAssets('nv');
+    const res = await provider.searchSymbols('nv');
     expect(res[0]?.symbol).toBe('NVDA');
-    expect((await provider.searchAssets('apple'))[0]?.symbol).toBe('AAPL');
-    expect(await provider.searchAssets('zzzz')).toEqual([]);
+    expect((await provider.searchSymbols('apple'))[0]?.symbol).toBe('AAPL');
+    expect(await provider.searchSymbols('zzzz')).toEqual([]);
   });
 
   it('returns ascending, gap-free candles with a trailing in-progress candle', async () => {
@@ -79,7 +79,7 @@ describe('CachedMarketDataProvider', () => {
         return inner.getQuote(s);
       },
     });
-    const cached = new CachedMarketDataProvider(counting, 5_000, 100, () => t);
+    const cached = new CachedMarketDataProvider(counting, { quoteTtlMs: 5_000, now: () => t });
     await cached.getQuote('NVDA');
     await cached.getQuote('NVDA');
     expect(calls).toBe(1);

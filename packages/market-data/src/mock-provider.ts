@@ -1,4 +1,4 @@
-import type { AssetInfo, Candle, Quote, Timeframe } from '@signals/types';
+import type { AssetInfo, NormalizedCandle, Quote, Timeframe } from '@signals/types';
 import { TIMEFRAMES, candleOpenTime, timeframeToMs } from '@signals/types';
 import { MOCK_ASSETS, type MockAsset } from './catalog';
 import { UnknownSymbolError, type MarketDataProvider } from './provider';
@@ -34,7 +34,7 @@ export class MockMarketDataProvider implements MarketDataProvider {
     this.assets = new Map((options.assets ?? MOCK_ASSETS).map((a) => [a.symbol, a]));
   }
 
-  async searchAssets(query: string, limit = 20): Promise<AssetInfo[]> {
+  async searchSymbols(query: string, limit = 20): Promise<AssetInfo[]> {
     const q = query.trim().toUpperCase();
     if (!q) return [];
     const matches = [...this.assets.values()].filter(
@@ -65,6 +65,9 @@ export class MockMarketDataProvider implements MarketDataProvider {
       changePercent: round((change / previousClose) * 100, 4),
       volume: Math.round(asset.baseVolumePerMinute * minutesToday),
       timestamp: new Date(now).toISOString(),
+      currency: asset.currency,
+      exchange: asset.exchange,
+      marketOpen: true, // synthetic 24/7 market
       delayed: this.delayed,
       source: this.name,
     };
@@ -74,12 +77,12 @@ export class MockMarketDataProvider implements MarketDataProvider {
     symbol: string,
     timeframe: Timeframe,
     limit: number,
-  ): Promise<Candle[]> {
+  ): Promise<NormalizedCandle[]> {
     const asset = this.require(symbol);
     const tf = timeframeToMs(timeframe);
     const now = this.now();
     const currentOpen = candleOpenTime(now, timeframe);
-    const candles: Candle[] = [];
+    const candles: NormalizedCandle[] = [];
     for (let k = limit - 1; k >= 0; k--) {
       const open = currentOpen - k * tf;
       // The current candle is in progress: its "close" is the latest price.
@@ -102,7 +105,12 @@ export class MockMarketDataProvider implements MarketDataProvider {
     return asset.basePrice * Math.exp(wave + 0.0015 * smoothNoise(seed, minutes));
   }
 
-  private buildCandle(asset: MockAsset, open: number, end: number, timeframe: Timeframe): Candle {
+  private buildCandle(
+    asset: MockAsset,
+    open: number,
+    end: number,
+    timeframe: Timeframe,
+  ): NormalizedCandle {
     const o = this.priceAt(asset, open);
     const c = this.priceAt(asset, end);
     let high = Math.max(o, c);
@@ -120,7 +128,10 @@ export class MockMarketDataProvider implements MarketDataProvider {
     // ~5% of candles are volume spikes (1.8x - 3.3x)
     if ((seed >>> 16) % 100 < 5) volume *= 1.8 + ((seed >>> 8) % 150) / 100;
     return {
+      symbol: asset.symbol,
+      timeframe,
       time: open,
+      timestamp: new Date(open).toISOString(),
       open: round(o),
       high: round(high),
       low: round(low),

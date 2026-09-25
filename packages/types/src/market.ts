@@ -31,9 +31,29 @@ export function candleOpenTime(timestampMs: number, timeframe: Timeframe): numbe
   return Math.floor(timestampMs / ms) * ms;
 }
 
-/** A candle is complete once its full interval has elapsed. */
-export function isCandleComplete(candle: Candle, timeframe: Timeframe, nowMs: number): boolean {
-  return candle.time + timeframeToMs(timeframe) <= nowMs;
+/**
+ * A candle is complete once its full interval has elapsed, plus an optional grace period
+ * that gives the vendor time to publish the final bar (late trades, aggregation lag).
+ */
+export function isCandleComplete(
+  candle: Pick<Candle, 'time'>,
+  timeframe: Timeframe,
+  nowMs: number,
+  graceMs = 0,
+): boolean {
+  return candle.time + timeframeToMs(timeframe) + graceMs <= nowMs;
+}
+
+/**
+ * Open time (epoch ms, UTC) of the most recent candle that is fully closed at `nowMs`.
+ * e.g. 5m at 14:37:30 -> 14:30 (the 14:30-14:35 bar); at 14:35:00 exactly -> 14:30.
+ */
+export function latestClosedCandleOpenTime(
+  nowMs: number,
+  timeframe: Timeframe,
+  graceMs = 0,
+): number {
+  return candleOpenTime(nowMs - graceMs, timeframe) - timeframeToMs(timeframe);
 }
 
 export const SymbolSchema = z
@@ -70,6 +90,18 @@ export interface Candle {
   volume: number;
 }
 
+/**
+ * Normalised candle returned by every MarketDataProvider. Vendor formats never leave
+ * packages/market-data. `time` (epoch ms) and `timestamp` (ISO 8601) are the same instant:
+ * the candle OPEN time in UTC. The signal engine only needs the `Candle` subset.
+ */
+export interface NormalizedCandle extends Candle {
+  symbol: string;
+  timeframe: Timeframe;
+  timestamp: string;
+}
+
+/** Normalised quote. All timestamps are UTC (ISO 8601); clients convert for display. */
 export interface Quote {
   symbol: string;
   price: number;
@@ -77,8 +109,12 @@ export interface Quote {
   change: number;
   changePercent: number;
   volume: number;
-  /** When the provider produced this price (ISO 8601). */
+  /** When the vendor last updated this price (ISO 8601, UTC). */
   timestamp: string;
+  currency: string;
+  exchange: string;
+  /** Vendor-reported session state; null when the vendor does not say. */
+  marketOpen: boolean | null;
   /** True when the provider's data is delayed (most free/cheap tiers are). */
   delayed: boolean;
   source: string;
@@ -92,6 +128,19 @@ export const QuoteSchema = z.object({
   changePercent: z.number(),
   volume: z.number(),
   timestamp: z.string(),
+  currency: z.string(),
+  exchange: z.string(),
+  marketOpen: z.boolean().nullable(),
   delayed: z.boolean(),
   source: z.string(),
 });
+
+/** Freshness assessment returned alongside prices so the UI can flag stale data. */
+export const DataFreshnessSchema = z.object({
+  /** True when data is older than expected while the market is (or may be) open. */
+  stale: z.boolean(),
+  ageSeconds: z.number().nullable(),
+  marketOpen: z.boolean().nullable(),
+  reason: z.string().nullable(),
+});
+export type DataFreshness = z.infer<typeof DataFreshnessSchema>;
