@@ -1,0 +1,253 @@
+// Stock Signal Alerts - PostgreSQL schema.
+// Timeframes are stored as validated strings ('1m','5m','15m','1h','1d') because Prisma enum
+// identifiers cannot start with a digit; validation lives in @signals/types.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AssetClass {
+  EQUITY
+  ETF
+  INDEX
+  CRYPTO
+  FOREX
+  COMMODITY
+}
+
+enum SignalCategory {
+  PRICE
+  MOVING_AVERAGE
+  MOMENTUM
+  VOLUME
+}
+
+enum SignalType {
+  PRICE_ABOVE
+  PRICE_BELOW
+  PCT_MOVE_UP
+  PCT_MOVE_DOWN
+  EMA_BULLISH_CROSS
+  EMA_BEARISH_CROSS
+  PRICE_CROSS_ABOVE_EMA
+  PRICE_CROSS_BELOW_EMA
+  RSI_OVERBOUGHT
+  RSI_OVERSOLD
+  RSI_CROSS_UP
+  RSI_CROSS_DOWN
+  MACD_BULLISH_CROSS
+  MACD_BEARISH_CROSS
+  VOLUME_SPIKE
+  VOLUME_ANOMALY
+}
+
+enum PushProvider {
+  FCM
+  APNS
+  EXPO
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  SUPPRESSED // alerts disabled globally / for the ticker / for the category
+  NO_DEVICES
+  FAILED
+}
+
+enum NotificationFrequency {
+  REALTIME
+  HOURLY_DIGEST
+  DAILY_DIGEST
+}
+
+model User {
+  id          String   @id @default(cuid())
+  /// Firebase Auth uid (or "dev:<email>" in AUTH_MODE=dev).
+  firebaseUid String   @unique
+  email       String?
+  displayName String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  settings          NotificationSettings?
+  devices           Device[]
+  watchlists        Watchlist[]
+  ownedDefinitions  SignalDefinition[]
+  subscriptions     SignalSubscription[]
+  signalEvents      SignalEvent[]
+}
+
+model NotificationSettings {
+  userId                String                @id
+  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alertsEnabled         Boolean               @default(true)
+  disabledCategories    SignalCategory[]      @default([])
+  // Future-compatible (stored, not yet enforced by the worker):
+  quietHoursStart       String? // "22:00"
+  quietHoursEnd         String? // "07:00"
+  timezone              String                @default("UTC")
+  notificationFrequency NotificationFrequency @default(REALTIME)
+  minimumSignalStrength Int                   @default(0)
+  updatedAt             DateTime              @updatedAt
+}
+
+model Device {
+  id         String       @id @default(cuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Push token. Unique: re-registering moves the token to the current user.
+  token      String       @unique
+  platform   String
+  provider   PushProvider @default(FCM)
+  createdAt  DateTime     @default(now())
+  lastSeenAt DateTime     @default(now())
+
+  @@index([userId])
+}
+
+/// Instrument reference data. Keyed by canonical symbol (e.g. "NVDA", "BTC-USD", "PTT.BK").
+model Asset {
+  symbol     String     @id
+  name       String
+  assetClass AssetClass
+  exchange   String
+  currency   String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  watchlistItems    WatchlistItem[]
+  signalDefinitions SignalDefinition[]
+}
+
+model Watchlist {
+  id        String          @id @default(cuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String          @default("My Watchlist")
+  isDefault Boolean         @default(false)
+  createdAt DateTime        @default(now())
+  items     WatchlistItem[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model WatchlistItem {
+  id            String    @id @default(cuid())
+  watchlistId   String
+  watchlist     Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  symbol        String
+  asset         Asset     @relation(fields: [symbol], references: [symbol])
+  /// Per-ticker notification switch.
+  alertsEnabled Boolean   @default(true)
+  position      Int       @default(0)
+  addedAt       DateTime  @default(now())
+
+  @@unique([watchlistId, symbol])
+  @@index([symbol])
+}
+
+/// WHAT to evaluate. Either a shared preset (ownerId null, presetKey set) that many users
+/// subscribe to - evaluated once per candle and fanned out - or a user-owned custom alert.
+model SignalDefinition {
+  id          String         @id @default(cuid())
+  ownerId     String?
+  owner       User?          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  /// "<ticker>:<timeframe>:<signalType>:<canonical params>" for presets; null for custom.
+  presetKey   String?        @unique
+  name        String
+  description String
+  category    SignalCategory
+  signalType  SignalType
+  ticker      String
+  asset       Asset          @relation(fields: [ticker], references: [symbol])
+  timeframe   String
+  parameters  Json
+  enabled     Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  subscriptions SignalSubscription[]
+  state         SignalState?
+  events        SignalEvent[]
+
+  @@index([ticker, timeframe, enabled])
+  @@index([ownerId])
+}
+
+/// WHO receives a definition's events.
+model SignalSubscription {
+  id                 String           @id @default(cuid())
+  userId             String
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  signalDefinitionId String
+  signalDefinition   SignalDefinition @relation(fields: [signalDefinitionId], references: [id], onDelete: Cascade)
+  enabled            Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([userId, signalDefinitionId])
+  @@index([signalDefinitionId, enabled])
+}
+
+/// Transition tracking: condition value at the last evaluated completed candle.
+model SignalState {
+  signalDefinitionId String           @id
+  signalDefinition   SignalDefinition @relation(fields: [signalDefinitionId], references: [id], onDelete: Cascade)
+  lastCandleTime     DateTime
+  lastActive         Boolean?
+  lastEvaluatedAt    DateTime         @default(now())
+  lastTriggeredAt    DateTime?
+}
+
+model SignalEvent {
+  id                 String            @id @default(cuid())
+  userId             String
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Nullable so history survives deletion of a custom signal.
+  signalDefinitionId String?
+  signalDefinition   SignalDefinition? @relation(fields: [signalDefinitionId], references: [id], onDelete: SetNull)
+  ticker             String
+  signalType         SignalType
+  category           SignalCategory
+  /// Snapshot of the definition name at trigger time.
+  name               String
+  timeframe          String
+  /// Open time of the completed candle that triggered the signal.
+  candleTime         DateTime
+  triggeredAt        DateTime          @default(now())
+  price              Float
+  /// Indicator values explaining the trigger, e.g. {"ema9":181.9,"ema21":181.7,"rsi14":63.2}
+  values             Json
+  message            String
+  deliveryStatus     DeliveryStatus    @default(PENDING)
+  deliveredAt        DateTime?
+  deliveryError      String?
+
+  /// Idempotency: one event per user/signal/candle, even with concurrent workers.
+  @@unique([userId, ticker, signalDefinitionId, timeframe, candleTime], name: "event_idempotency")
+  @@index([userId, triggeredAt(sort: Desc)])
+  @@index([userId, ticker, triggeredAt(sort: Desc)])
+}
+
+/// Ingested OHLCV history. The composite PK doubles as the (symbol, timeframe, time) range index.
+model MarketCandle {
+  symbol    String
+  timeframe String
+  time      DateTime
+  open      Float
+  high      Float
+  low       Float
+  close     Float
+  volume    Float
+  source    String
+  updatedAt DateTime @updatedAt
+
+  @@id([symbol, timeframe, time])
+}

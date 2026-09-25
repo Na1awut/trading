@@ -52,7 +52,8 @@ export type IndicatorSnapshot = z.infer<typeof IndicatorSnapshotSchema>;
 export const SignalEventSchema = z.object({
   id: z.string(),
   ticker: z.string(),
-  signalDefinitionId: z.string(),
+  /** Null when the originating custom signal has since been deleted. */
+  signalDefinitionId: z.string().nullable(),
   signalType: SignalTypeSchema,
   category: SignalCategorySchema,
   name: z.string(),
