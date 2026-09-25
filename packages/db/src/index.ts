@@ -15,3 +15,4 @@ export * from './services/users';
 export * from './services/watchlist';
 export * from './services/signals';
 export * from './services/events';
+export * from './services/candles';

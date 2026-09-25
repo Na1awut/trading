@@ -52,7 +52,12 @@ async function main() {
     `Market data: NVDA ${timeframe} candles where the last completed candle is an EMA 9/21 bullish cross`,
   );
   const now = Date.now();
-  const candles = buildEmaBullishCrossScenario({ now, timeframe, basePrice: 182 });
+  const candles = buildEmaBullishCrossScenario({
+    now,
+    timeframe,
+    basePrice: 182,
+    graceMs: config.CANDLE_CLOSE_GRACE_MS,
+  });
   const provider = new ScriptedMarketDataProvider(() => now).setCandles('NVDA', timeframe, candles);
   // Demo-only: forget prior transition state for NVDA so this candle is evaluated fresh.
   await prisma.signalState.deleteMany({
@@ -69,6 +74,7 @@ async function main() {
       logger,
       ingest: false,
       now: () => now,
+      settings: { candleCloseGraceMs: config.CANDLE_CLOSE_GRACE_MS },
     });
   const summary = await run();
   console.info(summary);

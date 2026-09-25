@@ -43,6 +43,11 @@ export class IndicatorContext {
     return this.memo(`vol:${period}`, () => volumeStats(this.volumes, period));
   }
 
+  /** Distinct indicator series computed so far (each is computed at most once). */
+  get computedSeries(): string[] {
+    return [...this.cache.keys()];
+  }
+
   private memo<T>(key: string, compute: () => T): T {
     if (!this.cache.has(key)) this.cache.set(key, compute());
     return this.cache.get(key) as T;

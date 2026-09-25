@@ -3,7 +3,7 @@ import { loadConfig } from '@signals/config';
 import { createPrismaClient } from '@signals/db';
 import { createMarketDataProvider } from '@signals/market-data';
 import { createNotificationSender } from '@signals/notifications';
-import { runEvaluationCycle } from './evaluation-cycle';
+import { createWorkerRuntime, runEvaluationCycle, type WorkerSettings } from './evaluation-cycle';
 import { startScheduler } from './scheduler';
 
 async function main() {
@@ -15,7 +15,23 @@ async function main() {
     vendor: config.MARKET_DATA_VENDOR,
     apiKey: config.MARKET_DATA_API_KEY,
     baseUrl: config.MARKET_DATA_BASE_URL,
+    allowCustomBaseUrl: config.MARKET_DATA_ALLOW_CUSTOM_BASE_URL,
+    delayed: config.MARKET_DATA_DELAYED,
+    timeoutMs: config.MARKET_DATA_TIMEOUT_MS,
+    maxRetries: config.MARKET_DATA_MAX_RETRIES,
+    requestsPerMinute: config.MARKET_DATA_RATE_LIMIT_PER_MINUTE,
+    logger: logger.child({ component: 'market-data' }),
   });
+  const settings: WorkerSettings = {
+    candleLookback: config.SIGNAL_CANDLE_LOOKBACK,
+    fetchConcurrency: config.SIGNAL_FETCH_CONCURRENCY,
+    candleCloseGraceMs: config.CANDLE_CLOSE_GRACE_MS,
+    maxCatchupCandles: config.SIGNAL_MAX_CATCHUP_CANDLES,
+    incompleteRefetchMs: config.SIGNAL_INCOMPLETE_REFETCH_MS,
+    shardIndex: config.WORKER_SHARD_INDEX,
+    shardCount: config.WORKER_SHARD_COUNT,
+  };
+  const runtime = createWorkerRuntime(settings);
   const notifier = createNotificationSender(config.NOTIFICATION_DRIVER, logger, {
     projectId: config.FIREBASE_PROJECT_ID,
     serviceAccountPath: config.FIREBASE_SERVICE_ACCOUNT_PATH,
@@ -28,8 +44,8 @@ async function main() {
       marketData,
       notifier,
       logger,
-      candleLookback: config.SIGNAL_CANDLE_LOOKBACK,
-      fetchConcurrency: config.SIGNAL_FETCH_CONCURRENCY,
+      settings,
+      runtime,
     });
     const level = summary.triggered > 0 || summary.errors > 0 ? 'info' : 'debug';
     logger[level](summary, 'evaluation cycle complete');

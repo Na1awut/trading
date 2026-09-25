@@ -43,6 +43,11 @@ export interface EvaluateSignalInput {
   /** Shared indicator cache - pass one per (symbol, timeframe) when evaluating many signals. */
   context?: IndicatorContext;
   /**
+   * Candle index to evaluate (default: the last candle). Used to catch up on missed candles
+   * in order without rebuilding indicators.
+   */
+  index?: number;
+  /**
    * Persisted condition state for the previous candle, if the caller has it (worker state
    * table). Preferred over recomputing so that a vendor revising an old candle cannot make
    * an already-fired signal fire again.
@@ -71,14 +76,16 @@ export interface SignalEvaluation {
 export function evaluateSignal(input: EvaluateSignalInput): SignalEvaluation {
   const rule = getRule(input.signalType);
   const ctx = input.context ?? new IndicatorContext(input.candles ?? []);
-  const last = ctx.length - 1;
+  const last = input.index ?? ctx.length - 1;
+  if (last >= ctx.length)
+    throw new RangeError(`index ${last} out of range (${ctx.length} candles)`);
   const base = {
     signalType: input.signalType,
     category: rule.category,
     label: rule.label,
   };
 
-  if (ctx.length < rule.minCandles(input.parameters)) {
+  if (last + 1 < rule.minCandles(input.parameters)) {
     return {
       ...base,
       evaluable: false,

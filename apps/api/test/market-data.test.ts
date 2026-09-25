@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { saveCandles } from '@signals/db';
 import { MarketDataError, ScriptedMarketDataProvider } from '@signals/market-data';
 import { NOW, auth, makeApp, prisma, resetDatabase } from './helpers';
 
@@ -107,6 +108,32 @@ describe('stale market data in API responses', () => {
     ).json();
     expect(body.indicatorsAsOf).toBe('2026-09-25T14:30:00.000Z');
     expect(body.indicators.close).toBe(candles.at(-1)!.close);
+    await app.close();
+  });
+});
+
+describe('candle reuse', () => {
+  it('serves asset indicators from worker-ingested candles without calling the vendor', async () => {
+    const provider = new ScriptedMarketDataProvider(() => NOW).setCandles('NVDA', '5m', candles);
+    const { app } = await makeApp({ SIGNAL_CANDLE_LOOKBACK: '60' }, { marketData: provider });
+    await app.inject({
+      method: 'POST',
+      url: '/watchlist',
+      headers: auth(),
+      payload: { symbol: 'NVDA' },
+    });
+    // What the worker would have stored: 60 completed candles up to the latest closed one.
+    await saveCandles(prisma, 'NVDA', '5m', candles.slice(-60), 'scripted');
+
+    const body = (
+      await app.inject({ method: 'GET', url: '/assets/NVDA?timeframe=5m', headers: auth() })
+    ).json();
+    expect(body.indicatorsAsOf).toBe('2026-09-25T14:30:00.000Z');
+    expect(provider.callsFor('getHistoricalCandles')).toHaveLength(0);
+
+    // A timeframe the worker does not track falls back to the vendor.
+    await app.inject({ method: 'GET', url: '/assets/NVDA?timeframe=1h', headers: auth() });
+    expect(provider.callsFor('getHistoricalCandles').map((c) => c.timeframe)).toEqual(['1h']);
     await app.close();
   });
 });

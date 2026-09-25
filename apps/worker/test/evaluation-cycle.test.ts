@@ -285,6 +285,6 @@ describe('robustness', () => {
     });
     const summary = await cycle(new MockMarketDataProvider({ now: () => NOW }));
     expect(summary).toMatchObject({ pairs: 1, evaluated: 15, errors: 0 });
-    expect(await prisma.marketCandle.count()).toBe(249);
+    expect(await prisma.marketCandle.count()).toBe(250); // full lookback of completed candles
   });
 });

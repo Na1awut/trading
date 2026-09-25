@@ -109,7 +109,9 @@ export class ScriptedMarketDataProvider implements MarketDataProvider {
       if (!this.assets.has(s)) throw new UnknownSymbolError(symbol);
       return [];
     }
-    return series.slice(-limit);
+    // Like a real vendor: nothing that has not started yet.
+    const now = this.now();
+    return series.filter((c) => c.time <= now).slice(-limit);
   }
 
   private findSeries(symbol: string): NormalizedCandle[] | undefined {

@@ -1,33 +1,88 @@
+import { randomUUID } from 'node:crypto';
 import type { PrismaClient, SignalDefinition, SignalState } from '@signals/db';
 import type { MarketDataProvider } from '@signals/market-data';
 import type { Logger, NotificationSender } from '@signals/notifications';
 import {
   IndicatorContext,
-  completedCandles,
   evaluateSignal,
   parseSignalParameters,
+  type SignalEvaluation,
 } from '@signals/signal-engine';
-import type { Timeframe } from '@signals/types';
+import { latestClosedCandleOpenTime, type Timeframe } from '@signals/types';
+import { loadCandleWindow } from './candle-source';
 import { mapWithConcurrency } from './concurrency';
 import { fanOutSignal } from './deliver';
-import { ingestCandles } from './ingest';
+import { PairFetchTracker } from './pair-tracker';
+
+export interface WorkerSettings {
+  candleLookback: number;
+  fetchConcurrency: number;
+  candleCloseGraceMs: number;
+  maxCatchupCandles: number;
+  incompleteRefetchMs: number;
+  /** Horizontal scaling without a queue: this instance handles pairs where hash % count == index. */
+  shardIndex: number;
+  shardCount: number;
+}
+
+export const DEFAULT_WORKER_SETTINGS: WorkerSettings = {
+  candleLookback: 250,
+  fetchConcurrency: 4,
+  candleCloseGraceMs: 0,
+  maxCatchupCandles: 3,
+  incompleteRefetchMs: 60_000,
+  shardIndex: 0,
+  shardCount: 1,
+};
 
 export interface CycleDeps {
   prisma: PrismaClient;
   marketData: MarketDataProvider;
   notifier: NotificationSender;
-  logger: Logger;
+  logger: WorkerLogger;
   now?: () => number;
+  settings?: Partial<WorkerSettings>;
+  /** Cross-cycle memory (fetch back-off). Create once per process with createWorkerRuntime(). */
+  runtime?: WorkerRuntime;
+  /** Persist/read candles via MarketCandle (default true). */
+  ingest?: boolean;
+  /** Back-compat aliases (Phase 1 options). */
   candleLookback?: number;
   fetchConcurrency?: number;
-  /** Persist fetched candles to MarketCandle (default true). */
-  ingest?: boolean;
+}
+
+/** pino-compatible; `debug`/`child` are optional so simple test loggers work. */
+export type WorkerLogger = Logger & {
+  debug?: (obj: object, msg?: string) => void;
+  child?: (bindings: object) => WorkerLogger;
+};
+
+export interface WorkerRuntime {
+  pairTracker: PairFetchTracker;
+}
+
+export function createWorkerRuntime(settings: Partial<WorkerSettings> = {}): WorkerRuntime {
+  return {
+    pairTracker: new PairFetchTracker(
+      settings.incompleteRefetchMs ?? DEFAULT_WORKER_SETTINGS.incompleteRefetchMs,
+    ),
+  };
 }
 
 export interface CycleSummary {
+  evaluationCycleId: string;
   pairs: number;
+  pairsSkippedUpToDate: number;
+  pairsBackedOff: number;
+  pairsFetched: number;
+  candlesFetched: number;
+  stalePairs: number;
+  /** Distinct indicator series computed (shared by all signals of a pair). */
+  indicatorSeriesComputed: number;
   evaluated: number;
+  /** Definition evaluations skipped because their latest candle was already evaluated. */
   skippedUpToDate: number;
+  subscriptionsEvaluated: number;
   triggered: number;
   eventsCreated: number;
   duplicatesSkipped: number;
@@ -39,20 +94,40 @@ export interface CycleSummary {
 type ActiveDefinition = SignalDefinition & {
   state: SignalState | null;
   asset: { currency: string };
+  _count: { subscriptions: number };
 };
 
 /**
- * ONE evaluation pass over every active (ticker, timeframe) pair. Stateless between calls
- * (all state lives in Postgres), so it can be driven by the interval scheduler here, a cron
- * job, a serverless schedule, or split per pair into BullMQ jobs later.
+ * ONE evaluation pass. Work is grouped by (ticker, timeframe): candles are loaded once per
+ * pair, indicators computed once per pair (shared IndicatorContext), and every definition /
+ * subscription for that pair is evaluated from that single data set. All durable state lives
+ * in Postgres, so this can be driven by the interval scheduler, cron, a serverless schedule,
+ * or split per pair into queue jobs later.
  */
 export async function runEvaluationCycle(deps: CycleDeps): Promise<CycleSummary> {
   const started = Date.now();
   const now = deps.now?.() ?? Date.now();
+  const settings: WorkerSettings = {
+    ...DEFAULT_WORKER_SETTINGS,
+    ...(deps.candleLookback ? { candleLookback: deps.candleLookback } : {}),
+    ...(deps.fetchConcurrency ? { fetchConcurrency: deps.fetchConcurrency } : {}),
+    ...deps.settings,
+  };
+  const runtime = deps.runtime ?? createWorkerRuntime(settings);
+  const evaluationCycleId = randomUUID();
+  const logger = deps.logger.child?.({ evaluationCycleId }) ?? deps.logger;
   const summary: CycleSummary = {
+    evaluationCycleId,
     pairs: 0,
+    pairsSkippedUpToDate: 0,
+    pairsBackedOff: 0,
+    pairsFetched: 0,
+    candlesFetched: 0,
+    stalePairs: 0,
+    indicatorSeriesComputed: 0,
     evaluated: 0,
     skippedUpToDate: 0,
+    subscriptionsEvaluated: 0,
     triggered: 0,
     eventsCreated: 0,
     duplicatesSkipped: 0,
@@ -61,63 +136,145 @@ export async function runEvaluationCycle(deps: CycleDeps): Promise<CycleSummary>
     durationMs: 0,
   };
 
-  // Only definitions somebody is actually listening to.
+  // Only definitions somebody is actually listening to, with their listener count.
   const definitions: ActiveDefinition[] = await deps.prisma.signalDefinition.findMany({
     where: { enabled: true, subscriptions: { some: { enabled: true } } },
-    include: { state: true, asset: { select: { currency: true } } },
+    include: {
+      state: true,
+      asset: { select: { currency: true } },
+      _count: { select: { subscriptions: { where: { enabled: true } } } },
+    },
   });
 
   const groups = new Map<string, ActiveDefinition[]>();
   for (const def of definitions) {
     const key = `${def.ticker}|${def.timeframe}`;
+    if (settings.shardCount > 1 && shardOf(key, settings.shardCount) !== settings.shardIndex)
+      continue;
     groups.set(key, [...(groups.get(key) ?? []), def]);
   }
   summary.pairs = groups.size;
 
-  await mapWithConcurrency([...groups.values()], deps.fetchConcurrency ?? 4, async (defs) => {
-    const { ticker } = defs[0]!;
-    const timeframe = defs[0]!.timeframe as Timeframe;
-    try {
-      await evaluatePair(deps, ticker, timeframe, defs, now, summary);
-    } catch (err) {
-      summary.errors++;
-      deps.logger.error({ err, ticker, timeframe }, 'pair evaluation failed');
-    }
-  });
+  await mapWithConcurrency(
+    [...groups.entries()],
+    settings.fetchConcurrency,
+    async ([key, defs]) => {
+      const { ticker } = defs[0]!;
+      const timeframe = defs[0]!.timeframe as Timeframe;
+      const pairStarted = Date.now();
+      try {
+        const r = await evaluatePair(
+          { ...deps, logger },
+          settings,
+          runtime,
+          key,
+          ticker,
+          timeframe,
+          defs,
+          now,
+          summary,
+        );
+        if (r) {
+          const log = r.eventsCreated > 0 ? logger.info.bind(logger) : logger.debug?.bind(logger);
+          log?.(
+            {
+              symbol: ticker,
+              timeframe,
+              fetched: r.fetched,
+              candlesEvaluated: r.candlesEvaluated,
+              indicatorSeriesComputed: r.indicatorSeriesComputed,
+              subscriptionsEvaluated: r.subscriptionsEvaluated,
+              eventsCreated: r.eventsCreated,
+              notificationsSent: r.notificationsSent,
+              durationMs: Date.now() - pairStarted,
+            },
+            'pair evaluated',
+          );
+        }
+      } catch (err) {
+        summary.errors++;
+        logger.error({ err, symbol: ticker, timeframe }, 'pair evaluation failed');
+      }
+    },
+  );
 
   summary.durationMs = Date.now() - started;
   return summary;
 }
 
+interface PairResult {
+  fetched: boolean;
+  indicatorSeriesComputed: number;
+  candlesEvaluated: number;
+  subscriptionsEvaluated: number;
+  eventsCreated: number;
+  notificationsSent: number;
+}
+
 async function evaluatePair(
   deps: CycleDeps,
+  settings: WorkerSettings,
+  runtime: WorkerRuntime,
+  key: string,
   ticker: string,
   timeframe: Timeframe,
   defs: ActiveDefinition[],
   now: number,
   summary: CycleSummary,
-): Promise<void> {
-  const raw = await deps.marketData.getHistoricalCandles(
-    ticker,
-    timeframe,
-    deps.candleLookback ?? 250,
-  );
-  // Signals are confirmed on COMPLETED candles only - the in-progress candle is dropped.
-  const candles = completedCandles(raw, timeframe, now);
-  if (candles.length === 0) return;
-  if (deps.ingest !== false) {
-    await ingestCandles(deps.prisma, ticker, timeframe, candles, deps.marketData.name);
+): Promise<PairResult | null> {
+  const expectedLatest = latestClosedCandleOpenTime(now, timeframe, settings.candleCloseGraceMs);
+
+  // Cheapest path: every definition already evaluated the latest closed candle.
+  if (defs.every((d) => d.state && d.state.lastCandleTime.getTime() >= expectedLatest)) {
+    summary.pairsSkippedUpToDate++;
+    summary.skippedUpToDate += defs.length;
+    return null;
+  }
+  if (!runtime.pairTracker.shouldFetch(key, expectedLatest, now)) {
+    summary.pairsBackedOff++;
+    return null;
   }
 
-  const latest = candles.at(-1)!;
-  const previous = candles.at(-2);
+  const window = await loadCandleWindow(deps, ticker, timeframe, {
+    now,
+    lookback: settings.candleLookback,
+    graceMs: settings.candleCloseGraceMs,
+    persist: deps.ingest !== false,
+  });
+  runtime.pairTracker.record(key, expectedLatest, window.complete, now);
+  if (window.fetched) {
+    summary.pairsFetched++;
+    summary.candlesFetched += window.fetchedCount;
+  }
+  if (!window.complete) summary.stalePairs++;
+  const { candles } = window;
+  if (candles.length === 0) return null;
+
+  // One indicator cache for the whole pair: EMA/RSI/MACD are computed once, not per signal.
   const context = new IndicatorContext(candles);
+  const result: PairResult = {
+    fetched: window.fetched,
+    indicatorSeriesComputed: 0,
+    candlesEvaluated: 0,
+    subscriptionsEvaluated: 0,
+    eventsCreated: 0,
+    notificationsSent: 0,
+  };
 
   for (const def of defs) {
-    if (def.state && def.state.lastCandleTime.getTime() >= latest.time) {
-      summary.skippedUpToDate++;
-      continue; // this candle was already evaluated for this definition
+    const lastEvaluated = def.state?.lastCandleTime.getTime();
+    // Candles after the last evaluated one. New definitions start at the latest candle only.
+    let indices: number[] = [];
+    for (let i = 0; i < candles.length; i++) {
+      if (lastEvaluated === undefined ? i === candles.length - 1 : candles[i]!.time > lastEvaluated)
+        indices.push(i);
     }
+    if (indices.length === 0) {
+      summary.skippedUpToDate++;
+      continue;
+    }
+    // Catch up on at most N missed candles; older gaps are skipped (no stale alert floods).
+    indices = indices.slice(-Math.max(1, settings.maxCatchupCandles));
 
     let parameters;
     try {
@@ -128,47 +285,62 @@ async function evaluatePair(
       continue;
     }
 
-    // Prefer the persisted condition for the immediately preceding candle (transition
-    // tracking); if we have a gap (first run, downtime) recompute it from candles.
-    const previousActive =
-      def.state && previous && def.state.lastCandleTime.getTime() === previous.time
+    let previousActive: boolean | null | undefined =
+      def.state &&
+      indices[0]! > 0 &&
+      def.state.lastCandleTime.getTime() === candles[indices[0]! - 1]!.time
         ? def.state.lastActive
         : undefined;
+    let last: SignalEvaluation | undefined;
+    let triggeredAny = false;
 
-    const evaluation = evaluateSignal({
-      signalType: def.signalType,
-      parameters,
-      context,
-      previousActive,
-      currency: def.asset.currency,
-    });
-    summary.evaluated++;
+    for (const index of indices) {
+      const evaluation = evaluateSignal({
+        signalType: def.signalType,
+        parameters,
+        context,
+        index,
+        previousActive,
+        currency: def.asset.currency,
+      });
+      summary.evaluated++;
+      result.candlesEvaluated++;
+      result.subscriptionsEvaluated += def._count.subscriptions;
+      summary.subscriptionsEvaluated += def._count.subscriptions;
 
-    if (evaluation.triggered) {
-      summary.triggered++;
-      deps.logger.info(
-        {
-          ticker,
-          timeframe,
-          signal: def.name,
-          candleTime: new Date(latest.time).toISOString(),
-          message: evaluation.message,
-        },
-        'signal triggered',
-      );
-      // Events BEFORE state: a crash in between just re-evaluates the candle next cycle,
-      // and the unique constraint absorbs the duplicate.
-      const r = await fanOutSignal(deps, def, evaluation);
-      summary.eventsCreated += r.created;
-      summary.duplicatesSkipped += r.duplicates;
-      summary.notificationsSent += r.notificationsSent;
+      if (evaluation.triggered) {
+        triggeredAny = true;
+        summary.triggered++;
+        deps.logger.info(
+          {
+            symbol: ticker,
+            timeframe,
+            signal: def.name,
+            candleTime: new Date(candles[index]!.time).toISOString(),
+            message: evaluation.message,
+          },
+          'signal triggered',
+        );
+        // Events BEFORE state: a crash in between re-evaluates the candle next cycle and the
+        // unique constraint absorbs the duplicate.
+        const r = await fanOutSignal(deps, def, evaluation);
+        summary.eventsCreated += r.created;
+        summary.duplicatesSkipped += r.duplicates;
+        summary.notificationsSent += r.notificationsSent;
+        result.eventsCreated += r.created;
+        result.notificationsSent += r.notificationsSent;
+      }
+      previousActive = evaluation.active;
+      last = evaluation;
     }
+    result.indicatorSeriesComputed = context.computedSeries.length;
 
+    if (!last || last.candleTime === null) continue;
     const stateData = {
-      lastCandleTime: new Date(latest.time),
-      lastActive: evaluation.active,
+      lastCandleTime: new Date(last.candleTime),
+      lastActive: last.active,
       lastEvaluatedAt: new Date(now),
-      ...(evaluation.triggered ? { lastTriggeredAt: new Date(now) } : {}),
+      ...(triggeredAny ? { lastTriggeredAt: new Date(now) } : {}),
     };
     await deps.prisma.signalState.upsert({
       where: { signalDefinitionId: def.id },
@@ -176,4 +348,16 @@ async function evaluatePair(
       create: { signalDefinitionId: def.id, ...stateData },
     });
   }
+  summary.indicatorSeriesComputed += result.indicatorSeriesComputed;
+  return result;
+}
+
+/** Stable shard assignment for a pair key (FNV-1a). */
+export function shardOf(key: string, count: number): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0) % count;
 }

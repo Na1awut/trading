@@ -94,6 +94,9 @@ const EnvSchema = z
     SIGNAL_MAX_CATCHUP_CANDLES: z.coerce.number().int().min(0).max(50).default(3),
     /** Wait before re-fetching a pair whose vendor data lacks the expected closed candle. */
     SIGNAL_INCOMPLETE_REFETCH_MS: ms(60_000, 1_000),
+    /** Split (ticker, timeframe) pairs across worker instances: this instance's index / total. */
+    WORKER_SHARD_INDEX: z.coerce.number().int().min(0).default(0),
+    WORKER_SHARD_COUNT: z.coerce.number().int().min(1).default(1),
     /** Confirmations used by the signal strength model (comma-separated). */
     SIGNAL_STRENGTH_CONFIRMATIONS: z.string().default('volume,rsi,trend,macd'),
 
@@ -148,6 +151,9 @@ const EnvSchema = z
           `Unsupported vendor (supported: ${SUPPORTED_VENDORS.join(', ')})`,
         );
       }
+    }
+    if (env.WORKER_SHARD_INDEX >= env.WORKER_SHARD_COUNT) {
+      issue('WORKER_SHARD_INDEX', 'Must be less than WORKER_SHARD_COUNT');
     }
     const unknownConfirmations = env.SIGNAL_STRENGTH_CONFIRMATIONS.split(',')
       .map((s) => s.trim())

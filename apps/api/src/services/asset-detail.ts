@@ -1,12 +1,48 @@
-import { listSignalEvents } from '@signals/db';
+import { listSignalEvents, loadRecentCandles } from '@signals/db';
 import { completedCandles, computeIndicatorSnapshot } from '@signals/signal-engine';
-import type { AssetDetail, Timeframe } from '@signals/types';
+import {
+  latestClosedCandleOpenTime,
+  type AssetDetail,
+  type NormalizedCandle,
+  type Timeframe,
+} from '@signals/types';
 import {
   UnknownSymbolError,
   assessCandleFreshness,
   assessQuoteFreshness,
 } from '@signals/market-data';
 import type { AppDeps } from '../deps';
+
+/**
+ * Completed candles for display. Prefer the MarketCandle history the worker already
+ * ingested (shared by all users and API instances); fall back to the (cached) provider when
+ * the stored window is incomplete - e.g. a timeframe no signal uses yet.
+ */
+async function completedCandleWindow(
+  deps: AppDeps,
+  symbol: string,
+  timeframe: Timeframe,
+  now: number,
+): Promise<NormalizedCandle[]> {
+  const lookback = deps.config.SIGNAL_CANDLE_LOOKBACK;
+  const grace = deps.config.CANDLE_CLOSE_GRACE_MS;
+  const stored = await loadRecentCandles(
+    deps.prisma,
+    symbol,
+    timeframe,
+    lookback,
+    deps.marketData.name,
+  );
+  if (
+    stored.length >= lookback &&
+    stored.at(-1)!.time >= latestClosedCandleOpenTime(now, timeframe, grace)
+  ) {
+    return stored;
+  }
+  const fetched = await deps.marketData.getHistoricalCandles(symbol, timeframe, lookback + 1);
+  // Strict: only fully closed candles (incl. vendor grace period) feed the indicators.
+  return completedCandles(fetched, timeframe, now, grace).slice(-lookback);
+}
 
 /** Assemble the asset detail view. All indicator math happens here, server-side. */
 export async function getAssetDetail(
@@ -19,17 +55,15 @@ export async function getAssetDetail(
   const asset = await deps.marketData.getAsset(symbol);
   if (!asset) throw new UnknownSymbolError(symbol);
 
-  const [quote, candles, recentEvents, watchItem] = await Promise.all([
+  const [quote, completed, recentEvents, watchItem] = await Promise.all([
     deps.marketData.getQuote(symbol),
-    deps.marketData.getHistoricalCandles(symbol, timeframe, deps.config.SIGNAL_CANDLE_LOOKBACK),
+    completedCandleWindow(deps, symbol, timeframe, now),
     listSignalEvents(deps.prisma, userId, { ticker: symbol, limit: 10 }),
     deps.prisma.watchlistItem.findFirst({
       where: { symbol, watchlist: { userId } },
       select: { id: true },
     }),
   ]);
-  // Strict: only fully closed candles (incl. vendor grace period) feed the indicators.
-  const completed = completedCandles(candles, timeframe, now, deps.config.CANDLE_CLOSE_GRACE_MS);
   const last = completed.at(-1);
 
   return {

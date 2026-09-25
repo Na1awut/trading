@@ -1,5 +1,10 @@
 import { ema } from '@signals/signal-engine';
-import { candleOpenTime, timeframeToMs, type Candle, type Timeframe } from '@signals/types';
+import {
+  latestClosedCandleOpenTime,
+  timeframeToMs,
+  type Candle,
+  type Timeframe,
+} from '@signals/types';
 
 /**
  * Candles whose LAST COMPLETED candle is an EMA 9/21 bullish crossover, followed by one
@@ -10,6 +15,8 @@ export function buildEmaBullishCrossScenario(opts: {
   timeframe: Timeframe;
   basePrice?: number;
   volume?: number;
+  /** Must match the worker's CANDLE_CLOSE_GRACE_MS so the cross candle counts as closed. */
+  graceMs?: number;
 }): Candle[] {
   const base = opts.basePrice ?? 180;
   const closes: number[] = [];
@@ -28,7 +35,7 @@ export function buildEmaBullishCrossScenario(opts: {
   }
 
   const tf = timeframeToMs(opts.timeframe);
-  const lastCompletedOpen = candleOpenTime(opts.now, opts.timeframe) - tf;
+  const lastCompletedOpen = latestClosedCandleOpenTime(opts.now, opts.timeframe, opts.graceMs ?? 0);
   const candles: Candle[] = closes.map((close, i) => {
     const open = i === 0 ? close : closes[i - 1]!;
     return {
