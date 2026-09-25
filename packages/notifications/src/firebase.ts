@@ -19,12 +19,34 @@ export function getFirebaseAdminApp(options: FirebaseAdminOptions): App {
   let credential;
   if (options.serviceAccountBase64) {
     credential = cert(
-      JSON.parse(Buffer.from(options.serviceAccountBase64, 'base64').toString('utf8')),
+      parseServiceAccount(
+        Buffer.from(options.serviceAccountBase64, 'base64').toString('utf8'),
+        'FIREBASE_SERVICE_ACCOUNT_BASE64',
+      ),
     );
   } else if (options.serviceAccountPath) {
-    credential = cert(JSON.parse(readFileSync(options.serviceAccountPath, 'utf8')));
+    credential = cert(
+      parseServiceAccount(
+        readFileSync(options.serviceAccountPath, 'utf8'),
+        'FIREBASE_SERVICE_ACCOUNT_PATH',
+      ),
+    );
   } else {
     credential = applicationDefault();
   }
   return initializeApp({ credential, projectId: options.projectId });
+}
+
+/**
+ * Parse service-account JSON without leaking it: Node's JSON.parse error messages quote a
+ * snippet of the input, which would put key material into startup logs.
+ */
+export function parseServiceAccount(json: string, source: string): object {
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (typeof parsed !== 'object' || parsed === null) throw new Error('not an object');
+    return parsed;
+  } catch {
+    throw new Error(`${source} does not contain valid service-account JSON`);
+  }
 }

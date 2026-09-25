@@ -1,5 +1,5 @@
 import { pino } from 'pino';
-import { loadConfig } from '@signals/config';
+import { LOG_REDACT_PATHS, loadConfig } from '@signals/config';
 import { createPrismaClient } from '@signals/db';
 import { createMarketDataProvider } from '@signals/market-data';
 import { createNotificationSender } from '@signals/notifications';
@@ -7,11 +7,13 @@ import { strengthModelFromList } from '@signals/signal-engine';
 import { createWorkerRuntime, runEvaluationCycle, type WorkerSettings } from './evaluation-cycle';
 import { runNotificationSweep } from './notifications/delivery';
 import type { DeliverySettings } from './notifications/settings';
+import { WorkerHealth, startHealthServer } from './health';
+import { runCandleRetention } from './retention';
 import { startScheduler } from './scheduler';
 
 async function main() {
   const config = loadConfig();
-  const logger = pino({ level: config.LOG_LEVEL, name: 'worker' });
+  const logger = pino({ level: config.LOG_LEVEL, name: 'worker', redact: LOG_REDACT_PATHS });
   const prisma = createPrismaClient(config.DATABASE_URL);
   const marketData = createMarketDataProvider({
     provider: config.MARKET_DATA_PROVIDER,
@@ -50,22 +52,46 @@ async function main() {
     serviceAccountBase64: config.FIREBASE_SERVICE_ACCOUNT_BASE64,
   });
 
+  const health = new WorkerHealth(Math.max(5 * config.SIGNAL_POLL_INTERVAL_MS, 120_000));
+  const retentionPolicy = {
+    '1m': config.CANDLE_RETENTION_DAYS_1M,
+    '5m': config.CANDLE_RETENTION_DAYS_5M,
+    '15m': config.CANDLE_RETENTION_DAYS_15M,
+    '1h': config.CANDLE_RETENTION_DAYS_1H,
+    '1d': config.CANDLE_RETENTION_DAYS_1D,
+  } as const;
+  let lastRetentionAt = 0;
+
   const cycle = async () => {
-    const summary = await runEvaluationCycle({
-      prisma,
-      marketData,
-      notifier,
-      logger,
-      settings,
-      runtime,
-      delivery,
-    });
-    // Retry sweep: PENDING after a crash, FAILED with elapsed back-off, stale SENDING claims,
-    // and notifications deferred by quiet hours.
-    const sweep = await runNotificationSweep({ prisma, notifier, logger, delivery });
-    if (sweep.candidates > 0) logger.info(sweep, 'notification sweep complete');
-    const level = summary.triggered > 0 || summary.errors > 0 ? 'info' : 'debug';
-    logger[level](summary, 'evaluation cycle complete');
+    try {
+      const summary = await runEvaluationCycle({
+        prisma,
+        marketData,
+        notifier,
+        logger,
+        settings,
+        runtime,
+        delivery,
+      });
+      // Always logged: cycle id, pairs, subscriptions evaluated, events, notifications, duration.
+      const quiet = summary.triggered === 0 && summary.errors === 0 && summary.pairsFetched === 0;
+      logger[quiet ? 'debug' : 'info'](summary, 'evaluation cycle complete');
+
+      // Retry sweep: PENDING after a crash, FAILED with elapsed back-off, stale SENDING
+      // claims, and notifications deferred by quiet hours.
+      const sweep = await runNotificationSweep({ prisma, notifier, logger, delivery });
+      if (sweep.candidates > 0) logger.info(sweep, 'notification sweep complete');
+
+      if (Date.now() - lastRetentionAt >= config.RETENTION_INTERVAL_MS) {
+        lastRetentionAt = Date.now();
+        const retention = await runCandleRetention(prisma, retentionPolicy);
+        logger.info(retention, 'candle retention complete');
+      }
+      health.recordSuccess();
+    } catch (err) {
+      health.recordFailure();
+      throw err;
+    }
   };
 
   if (process.argv.includes('--once')) {
@@ -87,10 +113,14 @@ async function main() {
     task: cycle,
     logger,
   });
+  const healthServer = config.WORKER_HEALTH_PORT
+    ? startHealthServer(health, config.WORKER_HEALTH_PORT)
+    : null;
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'stopping worker (finishing current cycle)');
     await scheduler.stop();
+    healthServer?.close();
     await prisma.$disconnect();
     process.exit(0);
   };

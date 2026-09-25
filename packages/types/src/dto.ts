@@ -107,7 +107,12 @@ export const AssetDetailSchema = z.object({
 export type AssetDetail = z.infer<typeof AssetDetailSchema>;
 
 export const AssetSearchQuerySchema = z.object({
-  q: z.string().trim().min(1).max(40),
+  q: z
+    .string()
+    .trim()
+    .min(1)
+    .max(40)
+    .regex(/^[\p{L}\p{N} .&'^=\-/]+$/u, "Letters, digits, spaces and . & ' ^ = - / only"),
 });
 
 /* ------------------------------ Signals ------------------------------ */
@@ -168,7 +173,13 @@ export const SignalEventsQuerySchema = z.object({
 
 export const PUSH_PROVIDERS = ['FCM', 'APNS', 'EXPO'] as const;
 export const RegisterDeviceBodySchema = z.object({
-  token: z.string().trim().min(10).max(4096),
+  // FCM tokens: [A-Za-z0-9_:-]; APNs: hex; Expo: ExponentPushToken[...].
+  token: z
+    .string()
+    .trim()
+    .min(10)
+    .max(4096)
+    .regex(/^[A-Za-z0-9_:\-.[\]]+$/, 'Invalid push token'),
   platform: z.enum(['ios', 'android', 'web']),
   provider: z.enum(PUSH_PROVIDERS).default('FCM'),
 });

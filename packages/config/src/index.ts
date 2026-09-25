@@ -110,6 +110,8 @@ const EnvSchema = z
     CANDLE_RETENTION_DAYS_1H: days(730),
     CANDLE_RETENTION_DAYS_1D: days(0),
     RETENTION_INTERVAL_MS: ms(3_600_000, 60_000),
+    /** Optional worker liveness endpoint (GET /health); 0 = disabled. */
+    WORKER_HEALTH_PORT: z.coerce.number().int().min(0).max(65535).default(0),
   })
   .superRefine((env, ctx) => {
     const issue = (path: string, message: string) =>
@@ -151,6 +153,21 @@ const EnvSchema = z
         issue(
           'MARKET_DATA_VENDOR',
           `Unsupported vendor (supported: ${SUPPORTED_VENDORS.join(', ')})`,
+        );
+      }
+    }
+    for (const [tf, days] of [
+      ['1m', env.CANDLE_RETENTION_DAYS_1M],
+      ['5m', env.CANDLE_RETENTION_DAYS_5M],
+      ['15m', env.CANDLE_RETENTION_DAYS_15M],
+      ['1h', env.CANDLE_RETENTION_DAYS_1H],
+      ['1d', env.CANDLE_RETENTION_DAYS_1D],
+    ] as const) {
+      const min = minRetentionDays(tf, env.SIGNAL_CANDLE_LOOKBACK);
+      if (days > 0 && days < min) {
+        issue(
+          `CANDLE_RETENTION_DAYS_${tf.toUpperCase()}`,
+          `${days} days cannot hold SIGNAL_CANDLE_LOOKBACK=${env.SIGNAL_CANDLE_LOOKBACK} ${tf} candles; use >= ${min} or 0 (keep forever)`,
         );
       }
     }
@@ -242,4 +259,48 @@ export function findRepoFile(name: string, from = process.cwd()): string | undef
     if (parent === dir) return undefined;
     dir = parent;
   }
+}
+
+/**
+ * pino redact paths used by every process. Values at these paths are replaced with
+ * "[REDACTED]" before a log line is written - defence in depth on top of never logging
+ * secrets deliberately.
+ */
+export const LOG_REDACT_PATHS = [
+  'req.headers.authorization',
+  'req.headers.cookie',
+  'req.headers["x-api-key"]',
+  'headers.authorization',
+  'authorization',
+  '*.authorization',
+  'apiKey',
+  '*.apiKey',
+  'apikey',
+  '*.apikey',
+  'token',
+  '*.token',
+  'idToken',
+  '*.idToken',
+  'privateKey',
+  '*.privateKey',
+  'private_key',
+  '*.private_key',
+  'serviceAccount',
+  '*.serviceAccount',
+];
+
+const TIMEFRAME_MINUTES = { '1m': 1, '5m': 5, '15m': 15, '1h': 60, '1d': 1440 } as const;
+
+/**
+ * Smallest safe MarketCandle retention (calendar days) for a timeframe so the worker's
+ * lookback window is always available from the database. Assumes a conservative 6.5-hour,
+ * 5-day trading week (equities) plus 20% margin; crypto (24/7) needs less.
+ */
+export function minRetentionDays(
+  timeframe: keyof typeof TIMEFRAME_MINUTES,
+  lookback: number,
+): number {
+  const perTradingDay = timeframe === '1d' ? 1 : (6.5 * 60) / TIMEFRAME_MINUTES[timeframe];
+  const perCalendarDay = (perTradingDay * 5) / 7;
+  return Math.max(4, Math.ceil((lookback / perCalendarDay) * 1.2));
 }

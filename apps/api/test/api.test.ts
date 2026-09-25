@@ -22,10 +22,15 @@ const addTicker = (symbol: string, email?: string) =>
   app.inject({ method: 'POST', url: '/watchlist', headers: auth(email), payload: { symbol } });
 
 describe('system & auth', () => {
-  it('GET /health is public', async () => {
+  it('GET /health is public and dependency-free; GET /ready checks the database', async () => {
     const res = await app.inject({ method: 'GET', url: '/health' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ status: 'ok', database: 'ok', marketData: 'mock' });
+    expect(res.json()).toMatchObject({ status: 'ok', marketData: 'mock' });
+    const ready = await app.inject({ method: 'GET', url: '/ready' });
+    expect(ready.json()).toEqual({
+      status: 'ready',
+      checks: { database: { status: 'ok' }, config: { status: 'ok' } },
+    });
   });
 
   it('rejects missing and malformed tokens', async () => {
@@ -493,7 +498,10 @@ describe('rate limiting', () => {
     const { app: limited } = await makeApp({ RATE_LIMIT_MAX: '3' });
     const codes: number[] = [];
     for (let i = 0; i < 4; i++)
-      codes.push((await limited.inject({ method: 'GET', url: '/health' })).statusCode);
+      codes.push(
+        (await limited.inject({ method: 'GET', url: '/signals/catalog', headers: auth() }))
+          .statusCode,
+      );
     expect(codes).toEqual([200, 200, 200, 429]);
     await limited.close();
   });

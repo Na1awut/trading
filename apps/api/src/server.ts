@@ -1,4 +1,4 @@
-import { loadConfig } from '@signals/config';
+import { LOG_REDACT_PATHS, loadConfig } from '@signals/config';
 import { createPrismaClient } from '@signals/db';
 import { CachedMarketDataProvider, createMarketDataProvider } from '@signals/market-data';
 import { createNotificationSender, getFirebaseAdminApp } from '@signals/notifications';
@@ -9,7 +9,7 @@ import { DevAuthVerifier, FirebaseAuthVerifier } from './plugins/auth';
 
 async function main() {
   const config = loadConfig();
-  const logger = pino({ level: config.LOG_LEVEL, name: 'api' });
+  const logger = pino({ level: config.LOG_LEVEL, name: 'api', redact: LOG_REDACT_PATHS });
   const prisma = createPrismaClient(config.DATABASE_URL);
   const firebase = {
     projectId: config.FIREBASE_PROJECT_ID,

@@ -84,3 +84,18 @@ describe('quiet hours (22:00 -> 07:00)', () => {
     );
   });
 });
+
+describe('service account parsing', () => {
+  it('never echoes the (secret) input in its error', async () => {
+    const { parseServiceAccount } = await import('../src');
+    const secret = '{"private_key": "-----BEGIN PRIVATE KEY-----MIIEv... broken';
+    expect(() => parseServiceAccount(secret, 'FIREBASE_SERVICE_ACCOUNT_BASE64')).toThrow(
+      'FIREBASE_SERVICE_ACCOUNT_BASE64 does not contain valid service-account JSON',
+    );
+    try {
+      parseServiceAccount(secret, 'X');
+    } catch (e) {
+      expect(String((e as Error).message)).not.toContain('PRIVATE KEY');
+    }
+  });
+});

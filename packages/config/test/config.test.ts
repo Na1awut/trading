@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ConfigError, parseConfig, parseTrustProxy } from '../src';
+import { ConfigError, minRetentionDays, parseConfig, parseTrustProxy } from '../src';
 
 const base = { DATABASE_URL: 'postgresql://u:p@localhost:5432/db' };
 
@@ -92,5 +92,17 @@ describe('parseConfig', () => {
     const hops = parseTrustProxy('1') as (a: string, h: number) => boolean;
     expect([hops('x', 0), hops('x', 1)]).toEqual([true, false]);
     expect(parseTrustProxy('10.0.0.0/8, 127.0.0.1')).toEqual(['10.0.0.0/8', '127.0.0.1']);
+  });
+
+  it('refuses retention that would delete the signal lookback window', () => {
+    expect(minRetentionDays('1d', 250)).toBe(420);
+    expect(minRetentionDays('1m', 250)).toBe(4);
+    expect(() => parseConfig({ ...base, CANDLE_RETENTION_DAYS_1D: '90' })).toThrow(
+      /CANDLE_RETENTION_DAYS_1D/,
+    );
+    expect(() => parseConfig({ ...base, CANDLE_RETENTION_DAYS_1H: '14' })).toThrow(/use >= 65/);
+    expect(parseConfig({ ...base, CANDLE_RETENTION_DAYS_1D: '0' }).CANDLE_RETENTION_DAYS_1D).toBe(
+      0,
+    );
   });
 });
