@@ -1,7 +1,8 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { AppState, Platform } from 'react-native';
 import { AuthProvider, useAuth } from '../src/auth/AuthContext';
 import { usePushNotifications } from '../src/notifications/push';
 import { colors, navTheme } from '../src/theme';
@@ -33,6 +34,15 @@ export default function RootLayout() {
   const [queryClient] = useState(
     () => new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 5_000 } } }),
   );
+  // Native: refetch as soon as the app returns to the foreground instead of showing prices
+  // from before it was backgrounded until the next poll (the web build uses page focus).
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const sub = AppState.addEventListener('change', (state) =>
+      focusManager.setFocused(state === 'active'),
+    );
+    return () => sub.remove();
+  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>

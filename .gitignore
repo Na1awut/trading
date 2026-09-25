@@ -23,3 +23,4 @@ apps/mobile/web-build/
 
 # Live validation reports (review before committing anything from here)
 validation-output/
+apps/mobile/dist-web/

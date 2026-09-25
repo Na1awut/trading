@@ -13,14 +13,22 @@ export const keys = {
   search: (q: string) => ['search', q] as const,
 };
 
+export const WATCHLIST_REFRESH_MS = 15_000;
+export const ASSET_REFRESH_MS = 15_000;
+export const EVENTS_REFRESH_MS = 20_000;
+
 export const useWatchlist = () =>
-  useQuery({ queryKey: keys.watchlist, queryFn: api.watchlist, refetchInterval: 15_000 });
+  useQuery({
+    queryKey: keys.watchlist,
+    queryFn: api.watchlist,
+    refetchInterval: WATCHLIST_REFRESH_MS,
+  });
 
 export const useAsset = (symbol: string, timeframe?: Timeframe) =>
   useQuery({
     queryKey: keys.asset(symbol, timeframe),
     queryFn: () => api.asset(symbol, timeframe),
-    refetchInterval: 15_000,
+    refetchInterval: ASSET_REFRESH_MS,
     placeholderData: (previous) => previous, // keep showing data while switching timeframe
   });
 
@@ -48,7 +56,7 @@ export const useSignalEvents = (ticker?: string) =>
     queryFn: ({ pageParam }) => api.signalEvents({ ticker, before: pageParam }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    refetchInterval: 20_000,
+    refetchInterval: EVENTS_REFRESH_MS,
   });
 
 export function useWatchlistMutations() {

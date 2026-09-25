@@ -1,19 +1,30 @@
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
-import { useSignalEvents } from '../../src/api/hooks';
+import { EVENTS_REFRESH_MS, useSignalEvents } from '../../src/api/hooks';
 import { SignalEventCard } from '../../src/components/SignalEventCard';
-import { Disclaimer, EmptyState, ErrorState, Loading } from '../../src/components/ui';
+import {
+  Disclaimer,
+  EmptyState,
+  ErrorState,
+  Loading,
+  RefreshStatusBanner,
+} from '../../src/components/ui';
 import { colors, spacing } from '../../src/theme';
 
 export default function HistoryScreen() {
   const router = useRouter();
   const q = useSignalEvents();
   if (q.isLoading) return <Loading />;
-  if (q.error) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
+  if (q.error && !q.data) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   const events = q.data?.pages.flatMap((p) => p.events) ?? [];
 
   return (
     <View style={styles.screen}>
+      <RefreshStatusBanner
+        query={q}
+        intervalMs={EVENTS_REFRESH_MS}
+        onRetry={() => void q.refetch()}
+      />
       <FlatList
         data={events}
         keyExtractor={(e) => e.id}

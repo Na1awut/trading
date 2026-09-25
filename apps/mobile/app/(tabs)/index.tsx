@@ -2,15 +2,22 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link, Stack, useRouter } from 'expo-router';
 import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import type { WatchlistItem } from '@signals/types';
-import { useWatchlist, useWatchlistMutations } from '../../src/api/hooks';
+import { WATCHLIST_REFRESH_MS, useWatchlist, useWatchlistMutations } from '../../src/api/hooks';
 import { DataStatusBadge, WatchlistSkeleton } from '../../src/components/badges';
-import { Button, ChangePill, EmptyState, ErrorState } from '../../src/components/ui';
-import { formatPct, formatPrice, formatTime } from '../../src/lib/format';
+import {
+  Button,
+  ChangePill,
+  EmptyState,
+  ErrorState,
+  RefreshStatusBanner,
+} from '../../src/components/ui';
+import { formatDateTime, formatPct, formatPrice } from '../../src/lib/format';
 import { colors, spacing } from '../../src/theme';
 
 export default function WatchlistScreen() {
   const router = useRouter();
-  const { data, error, isLoading, refetch, isRefetching } = useWatchlist();
+  const query = useWatchlist();
+  const { data, error, isLoading, refetch, isRefetching } = query;
   const { remove } = useWatchlistMutations();
 
   const confirmRemove = (item: WatchlistItem) =>
@@ -34,9 +41,14 @@ export default function WatchlistScreen() {
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ headerRight: () => addButton }} />
+      <RefreshStatusBanner
+        query={query}
+        intervalMs={WATCHLIST_REFRESH_MS}
+        onRetry={() => void refetch()}
+      />
       {isLoading ? (
         <WatchlistSkeleton />
-      ) : error ? (
+      ) : error && !data ? (
         <ErrorState error={error} onRetry={() => void refetch()} />
       ) : (
         <FlatList
@@ -83,7 +95,7 @@ export default function WatchlistScreen() {
                   />
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <DataStatusBadge status={item.dataStatus} delayed={item.quote.delayed} />
-                    <Text style={styles.updated}>{formatTime(item.quote.timestamp)}</Text>
+                    <Text style={styles.updated}>{formatDateTime(item.quote.timestamp)}</Text>
                   </View>
                 </View>
               ) : (

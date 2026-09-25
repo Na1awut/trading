@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { DISCLAIMER } from '@signals/types';
+import { formatDateTime } from '../lib/format';
 import { colors, spacing } from '../theme';
 
 export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
@@ -152,6 +153,17 @@ export function Disclaimer() {
 }
 
 export const styles = StyleSheet.create({
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    backgroundColor: 'rgba(245,158,11,0.14)',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  bannerText: { color: colors.warning, fontSize: 13, fontWeight: '600', flexShrink: 1 },
+  bannerAction: { color: colors.text, fontSize: 13, fontWeight: '700' },
   card: {
     backgroundColor: colors.card,
     borderRadius: 14,
@@ -220,3 +232,50 @@ export const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+/** The subset of a React Query result the banner needs. */
+export interface RefreshState {
+  data: unknown;
+  dataUpdatedAt: number;
+  isRefetchError: boolean;
+  fetchStatus: 'fetching' | 'paused' | 'idle';
+}
+
+/**
+ * Shown above data that may no longer be current: the last refresh failed, the device is
+ * offline, or nothing has refreshed for 3 polling intervals (e.g. timers paused in the
+ * background). The data stays visible, always labelled with the time it is from.
+ */
+export function RefreshStatusBanner({
+  query,
+  intervalMs,
+  onRetry,
+}: {
+  query: RefreshState;
+  intervalMs: number;
+  onRetry?: () => void;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 5_000);
+    return () => clearInterval(t);
+  }, []);
+  if (!query.data || !query.dataUpdatedAt) return null;
+  const since = formatDateTime(new Date(query.dataUpdatedAt).toISOString());
+  let text: string | null = null;
+  if (query.fetchStatus === 'paused') text = `Offline · showing data from ${since}`;
+  else if (query.isRefetchError) text = `Couldn't refresh · showing data from ${since}`;
+  else if (now - query.dataUpdatedAt > 3 * intervalMs && query.fetchStatus !== 'fetching')
+    text = `Not updated since ${since}`;
+  if (!text) return null;
+  return (
+    <View style={styles.banner} accessibilityRole="alert">
+      <Text style={styles.bannerText}>{text}</Text>
+      {onRetry ? (
+        <Pressable onPress={onRetry} accessibilityRole="button" hitSlop={8}>
+          <Text style={styles.bannerAction}>Retry</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}

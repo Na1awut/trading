@@ -28,6 +28,9 @@ export class ApiError extends Error {
   }
 }
 
+/** A request that has not completed by then fails instead of spinning forever. */
+export const REQUEST_TIMEOUT_MS = 15_000;
+
 let tokenProvider: (forceRefresh?: boolean) => Promise<string | null> = async () => null;
 let onUnauthorized: () => void = () => {};
 
@@ -46,8 +49,11 @@ async function send(
   forceRefresh: boolean,
 ) {
   const token = await tokenProvider(forceRefresh);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     return await fetch(`${API_URL}${path}`, {
+      signal: controller.signal,
       method: init.method ?? 'GET',
       headers: {
         Accept: 'application/json',
@@ -57,7 +63,12 @@ async function send(
       body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
     });
   } catch {
+    if (controller.signal.aborted) {
+      throw new ApiError(0, 'The server did not respond in time. Check your connection.');
+    }
     throw new ApiError(0, `Cannot reach the server at ${API_URL}`);
+  } finally {
+    clearTimeout(timer);
   }
 }
 

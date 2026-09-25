@@ -2,7 +2,12 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { TIMEFRAMES, type Timeframe } from '@signals/types';
-import { useAsset, useWatchlist, useWatchlistMutations } from '../../../src/api/hooks';
+import {
+  ASSET_REFRESH_MS,
+  useAsset,
+  useWatchlist,
+  useWatchlistMutations,
+} from '../../../src/api/hooks';
 import { DataStatusBadge, DetailSkeleton } from '../../../src/components/badges';
 import { SignalEventCard } from '../../../src/components/SignalEventCard';
 import {
@@ -12,6 +17,7 @@ import {
   Chip,
   Disclaimer,
   ErrorState,
+  RefreshStatusBanner,
   Row,
   SectionTitle,
 } from '../../../src/components/ui';
@@ -38,13 +44,15 @@ export default function AssetDetailScreen() {
   const symbol = decodeURIComponent(raw ?? '').toUpperCase();
   const router = useRouter();
   const [timeframe, setTimeframe] = useState<Timeframe | undefined>(undefined);
-  const { data, error, isLoading, refetch, isRefetching, isFetching } = useAsset(symbol, timeframe);
+  const assetQuery = useAsset(symbol, timeframe);
+  const { data, error, isLoading, refetch, isRefetching, isFetching } = assetQuery;
   const watchlist = useWatchlist();
   const { add, remove, setAlerts } = useWatchlistMutations();
   const item = watchlist.data?.items.find((i) => i.symbol === symbol);
 
   if (isLoading) return <DetailSkeleton />;
-  if (error || !data) return <ErrorState error={error} onRetry={() => void refetch()} />;
+  // Old data stays visible after a failed refresh, labelled by RefreshStatusBanner.
+  if (!data) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
   const { asset, quote, indicators: ind, dataStatus } = data;
   const currency = asset.currency;
@@ -65,6 +73,11 @@ export default function AssetDetailScreen() {
       }
     >
       <Stack.Screen options={{ title: asset.symbol }} />
+      <RefreshStatusBanner
+        query={assetQuery}
+        intervalMs={ASSET_REFRESH_MS}
+        onRetry={() => void refetch()}
+      />
       <Text style={styles.name}>{asset.name}</Text>
       <Text style={styles.meta}>
         {asset.exchange} · {asset.assetClass} · {asset.currency}

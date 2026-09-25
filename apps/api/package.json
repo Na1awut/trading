@@ -8,7 +8,8 @@
     "start": "node dist/server.js",
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "validate:firebase": "tsx scripts/validate-firebase.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",
