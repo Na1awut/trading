@@ -95,6 +95,37 @@ describe('stale market data in API responses', () => {
     await app.close();
   });
 
+  it('maps vendor failures to 503 (transient) / 502 (config) without vendor details', async () => {
+    const { app, provider } = await appWith(() => {});
+    const fail = (code: 'RATE_LIMITED' | 'TIMEOUT' | 'FORBIDDEN' | 'UNAUTHORIZED') => {
+      provider.searchSymbols = async () => {
+        throw new MarketDataError(code, 'plan does not include symbol_search (apikey=***)', {
+          vendor: 'twelvedata',
+          httpStatus: 403,
+        });
+      };
+    };
+    for (const [code, status] of [
+      ['RATE_LIMITED', 503],
+      ['TIMEOUT', 503],
+      ['FORBIDDEN', 502],
+      ['UNAUTHORIZED', 502],
+    ] as const) {
+      fail(code);
+      const res = await app.inject({ method: 'GET', url: '/assets/search?q=NV', headers: auth() });
+      expect(res.statusCode, code).toBe(status);
+      expect(res.json()).toEqual({
+        statusCode: status,
+        error: status === 503 ? 'Service Unavailable' : 'Bad Gateway',
+        message: 'Market data is temporarily unavailable',
+        code: 'MARKET_DATA_UNAVAILABLE',
+      });
+      expect(res.body).not.toMatch(/twelvedata|apikey|plan/);
+      if (code === 'RATE_LIMITED') expect(res.headers['retry-after']).toBe('30');
+    }
+    await app.close();
+  });
+
   it('never evaluates indicators on the in-progress candle', async () => {
     // 14:35 candle is still open at 14:37:30, even though the vendor returns it.
     const withOpen = [

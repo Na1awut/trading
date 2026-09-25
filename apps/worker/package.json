@@ -12,7 +12,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "verify:market-data": "tsx scripts/verify-market-data.ts",
-    "validate:market-data": "tsx scripts/validate-market-data.ts"
+    "validate:market-data": "tsx scripts/validate-market-data.ts",
+    "validate:security": "tsx scripts/validation/process-security.ts"
   },
   "dependencies": {
     "@signals/config": "workspace:*",
