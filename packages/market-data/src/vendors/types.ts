@@ -22,7 +22,12 @@ export interface VendorAdapter {
   quoteRequest(symbol: string): VendorRequest;
   parseQuote(body: unknown, symbol: string, ctx: ParseContext): Quote;
 
-  candlesRequest(symbol: string, timeframe: Timeframe, limit: number): VendorRequest;
+  candlesRequest(
+    symbol: string,
+    timeframe: Timeframe,
+    limit: number,
+    options?: { sessionMode?: SessionMode },
+  ): VendorRequest;
   parseCandles(body: unknown, symbol: string, timeframe: Timeframe): NormalizedCandle[];
 
   searchRequest(query: string, limit: number): VendorRequest;
@@ -33,3 +38,7 @@ export interface ParseContext {
   delayed: boolean;
   source: string;
 }
+
+/** regular: exchange regular session only (default). extended: include pre/post-market bars
+ *  where the vendor and plan support it (equities only - never applied to crypto/forex). */
+export type SessionMode = 'regular' | 'extended';

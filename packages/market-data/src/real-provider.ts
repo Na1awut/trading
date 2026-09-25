@@ -2,11 +2,11 @@ import type { AssetInfo, NormalizedCandle, Quote, Timeframe } from '@signals/typ
 import { resolveBaseUrl } from './base-url';
 import { MarketDataError, ProviderNotConfiguredError, UnknownSymbolError } from './errors';
 import { TokenBucketRateLimiter } from './http/rate-limiter';
-import { VendorHttpClient } from './http/vendor-http-client';
+import { VendorHttpClient, type VendorResponseObservation } from './http/vendor-http-client';
 import { noopLogger, type MarketDataLogger } from './logger';
 import type { MarketDataProvider } from './provider';
 import { SUPPORTED_VENDORS, VENDOR_ADAPTERS } from './vendors';
-import type { VendorAdapter } from './vendors/types';
+import type { SessionMode, VendorAdapter } from './vendors/types';
 
 export interface RealProviderOptions {
   /** MARKET_DATA_VENDOR, e.g. "twelvedata". */
@@ -30,6 +30,10 @@ export interface RealProviderOptions {
   now?: () => number;
   /** Inject a custom adapter (tests / new vendors). */
   adapter?: VendorAdapter;
+  /** MARKET_SESSION_MODE (default regular). */
+  sessionMode?: SessionMode;
+  /** Per-attempt observer (metrics, live audits). Receives no URL, query or API key. */
+  onResponse?: (o: VendorResponseObservation) => void;
 }
 
 /**
@@ -43,6 +47,7 @@ export class RealMarketDataProvider implements MarketDataProvider {
   readonly supportedTimeframes: ReadonlyArray<Timeframe>;
   private readonly adapter: VendorAdapter;
   private readonly http: VendorHttpClient;
+  private readonly sessionMode: SessionMode;
 
   constructor(options: RealProviderOptions) {
     const adapter = options.adapter ?? VENDOR_ADAPTERS[options.vendor.toLowerCase()];
@@ -58,6 +63,7 @@ export class RealMarketDataProvider implements MarketDataProvider {
       );
     }
     this.adapter = adapter;
+    this.sessionMode = options.sessionMode ?? 'regular';
     this.name = adapter.vendor;
     this.delayed = options.delayed ?? true;
     this.supportedTimeframes = adapter.supportedTimeframes;
@@ -83,6 +89,7 @@ export class RealMarketDataProvider implements MarketDataProvider {
       sleep: options.sleep,
       random: options.random,
       now: options.now,
+      onResponse: options.onResponse,
     });
   }
 
@@ -110,7 +117,10 @@ export class RealMarketDataProvider implements MarketDataProvider {
       );
     }
     const n = Math.min(limit, this.adapter.maxCandlesPerRequest);
-    const body = await this.http.getJson(this.adapter.candlesRequest(symbol, timeframe, n), {
+    const request = this.adapter.candlesRequest(symbol, timeframe, n, {
+      sessionMode: this.sessionMode,
+    });
+    const body = await this.http.getJson(request, {
       operation: 'candles',
       symbol,
     });

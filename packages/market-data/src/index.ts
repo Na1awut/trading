@@ -1,5 +1,7 @@
 import type { MarketDataProvider } from './provider';
 import type { MarketDataLogger } from './logger';
+import type { SessionMode } from './vendors/types';
+import type { VendorResponseObservation } from './http/vendor-http-client';
 import { MockMarketDataProvider } from './mock-provider';
 import { RealMarketDataProvider } from './real-provider';
 
@@ -16,6 +18,7 @@ export * from './freshness';
 export { resolveBaseUrl } from './base-url';
 export { SUPPORTED_VENDORS } from './vendors';
 export { TokenBucketRateLimiter, type RateLimiter } from './http/rate-limiter';
+export type { VendorResponseObservation } from './http/vendor-http-client';
 
 export interface MarketDataConfig {
   provider: 'mock' | 'real';
@@ -28,6 +31,8 @@ export interface MarketDataConfig {
   maxRetries?: number;
   requestsPerMinute?: number;
   logger?: MarketDataLogger;
+  onResponse?: (o: VendorResponseObservation) => void;
+  sessionMode?: SessionMode;
 }
 
 export function createMarketDataProvider(config: MarketDataConfig): MarketDataProvider {
@@ -45,6 +50,10 @@ export function createMarketDataProvider(config: MarketDataConfig): MarketDataPr
         maxRetries: config.maxRetries,
         requestsPerMinute: config.requestsPerMinute,
         logger: config.logger,
+        onResponse: config.onResponse,
+        sessionMode: config.sessionMode,
       });
   }
 }
+export * from './audit';
+export type { SessionMode } from './vendors/types';

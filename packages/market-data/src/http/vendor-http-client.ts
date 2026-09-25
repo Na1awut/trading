@@ -15,6 +15,35 @@ export interface RequestMeta {
   symbol?: string;
 }
 
+/**
+ * One HTTP attempt, reported to an optional observer (metrics, live validation audits).
+ * Never contains the request URL/query (where the API key lives) or request headers.
+ */
+export interface VendorResponseObservation {
+  vendor: string;
+  operation: RequestMeta['operation'];
+  symbol?: string;
+  path: string;
+  attempt: number;
+  /** HTTP status, or null when no response arrived (timeout / network). */
+  httpStatus: number | null;
+  durationMs: number;
+  ok: boolean;
+  errorCode?: MarketDataError['code'];
+  /** Rate-limit / credit headers only (e.g. api-credits-used, api-credits-left, retry-after). */
+  rateLimitHeaders: Record<string, string>;
+  /** Parsed JSON body (for audits). Callers must sanitise before persisting. */
+  body?: unknown;
+}
+
+const RATE_HEADER = /credit|rate|limit|retry-after|quota/i;
+
+interface AttemptContext {
+  status: number | null;
+  headers: Record<string, string>;
+  body: unknown;
+}
+
 export interface VendorHttpClientOptions {
   vendor: string;
   baseUrl: string;
@@ -35,6 +64,8 @@ export interface VendorHttpClientOptions {
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
   now?: () => number;
+  /** Called after every attempt (success or failure). Must not throw. */
+  onResponse?: (o: VendorResponseObservation) => void;
 }
 
 /**
@@ -44,9 +75,9 @@ export interface VendorHttpClientOptions {
  */
 export class VendorHttpClient {
   private readonly o: Required<
-    Omit<VendorHttpClientOptions, 'rateLimiter' | 'authQuery' | 'secrets'>
+    Omit<VendorHttpClientOptions, 'rateLimiter' | 'authQuery' | 'secrets' | 'onResponse'>
   > &
-    Pick<VendorHttpClientOptions, 'rateLimiter' | 'authQuery' | 'secrets'>;
+    Pick<VendorHttpClientOptions, 'rateLimiter' | 'authQuery' | 'secrets' | 'onResponse'>;
 
   constructor(options: VendorHttpClientOptions) {
     this.o = withDefaults(
@@ -79,18 +110,36 @@ export class VendorHttpClient {
 
     for (let attempt = 0; ; attempt++) {
       const started = this.o.now();
+      const seen: AttemptContext = { status: null, headers: {}, body: undefined };
       let error: MarketDataError;
       try {
         if (this.o.rateLimiter) await this.o.rateLimiter.acquire();
-        const body = await this.attempt(url, meta);
-        this.o.logger.debug(
-          { ...logBase, attempt, durationMs: this.o.now() - started },
-          'market data request ok',
-        );
+        const body = await this.attempt(url, meta, seen);
+        const durationMs = this.o.now() - started;
+        this.o.logger.debug({ ...logBase, attempt, durationMs }, 'market data request ok');
+        this.observe({
+          ...logBase,
+          attempt,
+          httpStatus: seen.status,
+          durationMs,
+          ok: true,
+          rateLimitHeaders: seen.headers,
+          body,
+        });
         return body;
       } catch (e) {
         error = e instanceof MarketDataError ? e : this.wrapUnknown(e);
       }
+      this.observe({
+        ...logBase,
+        attempt,
+        httpStatus: seen.status,
+        durationMs: this.o.now() - started,
+        ok: false,
+        errorCode: error.code,
+        rateLimitHeaders: seen.headers,
+        body: seen.body,
+      });
 
       const logObj = {
         ...logBase,
@@ -110,7 +159,15 @@ export class VendorHttpClient {
     }
   }
 
-  private async attempt(url: URL, meta: RequestMeta): Promise<unknown> {
+  private observe(o: VendorResponseObservation) {
+    try {
+      this.o.onResponse?.(o);
+    } catch {
+      // observers must never break requests
+    }
+  }
+
+  private async attempt(url: URL, meta: RequestMeta, seen: AttemptContext): Promise<unknown> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.o.timeoutMs);
     let res: Response;
@@ -119,6 +176,10 @@ export class VendorHttpClient {
       res = await this.o.fetch(url, {
         signal: controller.signal,
         headers: { accept: 'application/json' },
+      });
+      seen.status = res.status;
+      res.headers.forEach((value, key) => {
+        if (RATE_HEADER.test(key)) seen.headers[key] = value;
       });
       text = await res.text();
     } catch (e) {
@@ -144,8 +205,17 @@ export class VendorHttpClient {
     try {
       body = text.length ? JSON.parse(text) : undefined;
     } catch {
-      if (res.status >= 500 || res.status === 429) {
-        throw this.statusError(res, meta);
+      // A non-JSON ERROR page (proxy, WAF, CDN, load balancer) is classified by its HTTP
+      // status - e.g. an HTML 403 from a firewall is FORBIDDEN, not a vendor format change.
+      // A 404 without a vendor body means a wrong URL, not an unknown symbol.
+      if (res.status >= 400) {
+        throw res.status === 404
+          ? new MarketDataError('BAD_REQUEST', 'HTTP 404 (non-JSON): check MARKET_DATA_BASE_URL', {
+              vendor: this.o.vendor,
+              httpStatus: 404,
+              symbol: meta.symbol,
+            })
+          : this.statusError(res, meta);
       }
       throw new MarketDataError('BAD_RESPONSE', `Non-JSON response (HTTP ${res.status})`, {
         vendor: this.o.vendor,
@@ -154,6 +224,7 @@ export class VendorHttpClient {
       });
     }
 
+    seen.body = body;
     const classified = this.o.classify(res.status, body, meta);
     if (classified) {
       if (classified.code === 'RATE_LIMITED' && classified.retryAfterMs === undefined) {

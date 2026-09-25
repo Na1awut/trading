@@ -25,6 +25,8 @@ const INTERVALS: Record<Timeframe, string> = {
   '1d': '1day',
 };
 
+const EXTENDED_INTERVALS = new Set<Timeframe>(['1m', '5m', '15m']);
+
 /** Exchanges we list, keyed by Twelve Data exchange name -> canonical suffix. */
 const US_EXCHANGES = new Set([
   'NASDAQ',
@@ -204,16 +206,25 @@ export const twelveDataAdapter: VendorAdapter = {
     };
   },
 
-  candlesRequest: (symbol, timeframe, limit) => ({
-    path: '/time_series',
-    query: {
-      ...toVendorSymbol(symbol),
-      interval: INTERVALS[timeframe],
-      outputsize: String(Math.min(Math.max(limit, 1), 5000)),
-      timezone: 'UTC',
-      order: 'asc',
-    },
-  }),
+  candlesRequest: (symbol, timeframe, limit, options) => {
+    const vendorSymbol = toVendorSymbol(symbol);
+    // Twelve Data documents pre/post-market data ("prepost") for US equities at intraday
+    // intervals up to 30min on Pro+ plans. Crypto/forex pairs trade 24/7: never session-filtered.
+    const isPair = vendorSymbol.symbol!.includes('/');
+    const extended =
+      options?.sessionMode === 'extended' && !isPair && EXTENDED_INTERVALS.has(timeframe);
+    return {
+      path: '/time_series',
+      query: {
+        ...vendorSymbol,
+        interval: INTERVALS[timeframe],
+        outputsize: String(Math.min(Math.max(limit, 1), 5000)),
+        timezone: 'UTC',
+        order: 'asc',
+        ...(extended ? { prepost: 'true' } : {}),
+      },
+    };
+  },
 
   parseCandles(body: unknown, symbol: string, timeframe: Timeframe): NormalizedCandle[] {
     const parsed = TimeSeriesBody.safeParse(body);

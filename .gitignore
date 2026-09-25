@@ -20,3 +20,6 @@ apps/mobile/dist/
 apps/mobile/android/
 apps/mobile/ios/
 apps/mobile/web-build/
+
+# Live validation reports (review before committing anything from here)
+validation-output/

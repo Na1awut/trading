@@ -74,6 +74,11 @@ const EnvSchema = z
     MARKET_DATA_BASE_URL: z.string().url().optional(),
     /** Allow MARKET_DATA_BASE_URL outside the vendor's host allowlist (e.g. an egress proxy). */
     MARKET_DATA_ALLOW_CUSTOM_BASE_URL: bool.default(false),
+    /**
+     * Equity trading sessions to request: regular (default) or extended (pre/post-market,
+     * vendor/plan permitting; intraday <= 15m). Never applied to crypto/forex.
+     */
+    MARKET_SESSION_MODE: z.enum(['regular', 'extended']).default('regular'),
     /** Whether your plan's data is delayed; shown next to prices. */
     MARKET_DATA_DELAYED: bool.default(true),
     MARKET_DATA_TIMEOUT_MS: ms(8_000, 500),

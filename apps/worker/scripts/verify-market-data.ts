@@ -33,6 +33,7 @@ async function main() {
     timeoutMs: config.MARKET_DATA_TIMEOUT_MS,
     maxRetries: config.MARKET_DATA_MAX_RETRIES,
     requestsPerMinute: config.MARKET_DATA_RATE_LIMIT_PER_MINUTE,
+    sessionMode: config.MARKET_SESSION_MODE,
     logger,
   });
   const now = Date.now();

@@ -11,7 +11,8 @@
     "demo:slice": "tsx scripts/demo-slice.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "verify:market-data": "tsx scripts/verify-market-data.ts"
+    "verify:market-data": "tsx scripts/verify-market-data.ts",
+    "validate:market-data": "tsx scripts/validate-market-data.ts"
   },
   "dependencies": {
     "@signals/config": "workspace:*",

@@ -347,3 +347,86 @@ describe('RealMarketDataProvider - security', () => {
     expect(new UnknownSymbolError('X')).toBeInstanceOf(MarketDataError);
   });
 });
+
+describe('MARKET_SESSION_MODE', () => {
+  const series = { meta: { symbol: 'X', interval: '5min' }, values: [] };
+  it('regular (default) never requests extended hours', async () => {
+    const { p, urls } = provider([{ body: series }]);
+    await p.getHistoricalCandles('AAPL', '5m', 10);
+    expect(urls[0]!.searchParams.has('prepost')).toBe(false);
+  });
+
+  it('extended requests pre/post-market bars for equities at supported intervals only', async () => {
+    const { p, urls } = provider([{ body: series }, { body: series }, { body: series }], {
+      sessionMode: 'extended',
+    });
+    await p.getHistoricalCandles('AAPL', '5m', 10);
+    await p.getHistoricalCandles('AAPL', '1h', 10); // not documented for 1h
+    await p.getHistoricalCandles('BTC-USD', '5m', 10); // 24/7 market: never session-filtered
+    expect(urls.map((u) => u.searchParams.get('prepost'))).toEqual(['true', null, null]);
+  });
+
+  it('reports every attempt to the observer without the API key', async () => {
+    const seen: unknown[] = [];
+    const { p } = provider(
+      [
+        { status: 503 },
+        {
+          body: fixture('quote.json'),
+          headers: { 'api-credits-used': '1', 'api-credits-left': '7' },
+        },
+      ],
+      { onResponse: (o) => seen.push(o) },
+    );
+    await p.getQuote('NVDA');
+    expect(seen).toMatchObject([
+      {
+        operation: 'quote',
+        httpStatus: 503,
+        ok: false,
+        errorCode: 'UPSTREAM_UNAVAILABLE',
+        attempt: 0,
+      },
+      {
+        operation: 'quote',
+        httpStatus: 200,
+        ok: true,
+        attempt: 1,
+        rateLimitHeaders: { 'api-credits-used': '1', 'api-credits-left': '7' },
+      },
+    ]);
+    expect(JSON.stringify(seen)).not.toContain(KEY);
+  });
+});
+
+describe('non-JSON error pages from intermediaries (found in live validation)', () => {
+  it('classifies an HTML 403 from a proxy/WAF as FORBIDDEN, not a vendor format change', async () => {
+    const { p, urls } = provider([{ status: 403, raw: '<html><body>Access denied</body></html>' }]);
+    await expect(p.getQuote('NVDA')).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      httpStatus: 403,
+      retryable: false,
+    });
+    expect(urls).toHaveLength(1);
+  });
+
+  it('classifies HTML 401 as UNAUTHORIZED and HTML 404 as a configuration problem', async () => {
+    const a = provider([{ status: 401, raw: 'Unauthorized' }]);
+    await expect(a.p.getQuote('NVDA')).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    const b = provider([{ status: 404, raw: '<html>Not Found</html>' }]);
+    await expect(b.p.getQuote('NVDA')).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringMatching(/MARKET_DATA_BASE_URL/),
+    });
+  });
+
+  it('still retries HTML 502/503/429 pages', async () => {
+    const { p, urls } = provider([
+      { status: 502, raw: '<html>Bad gateway</html>' },
+      { status: 429, raw: 'slow down' },
+      { body: fixture('quote.json') },
+    ]);
+    expect((await p.getQuote('NVDA')).price).toBe(182.3);
+    expect(urls).toHaveLength(3);
+  });
+});
