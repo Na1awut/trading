@@ -1,7 +1,8 @@
 # Signal reference
 
-All signals are evaluated on **completed candles** and fire once when their condition
-**changes from false to true** (see [ARCHITECTURE.md](ARCHITECTURE.md#firing-once-transition-tracking)).
+All signals are evaluated on **completed candles** (closed for at least
+`CANDLE_CLOSE_GRACE_MS`) and fire once when their condition **changes from false to true**
+(see [ARCHITECTURE.md](ARCHITECTURE.md#firing-once)).
 Parameters are validated by the zod schema of each rule in `packages/signal-engine/src/rules`.
 
 | Type                    | Category | Condition (level)                     | Fires when                         | Default parameters                             |
@@ -36,14 +37,61 @@ Verification: `packages/signal-engine/test/indicators.test.ts` checks these agai
 reference tables and cross-checks them against the independent `technicalindicators` library
 on 300 to 400 candle random walks.
 
-## Explainability
+## Explainability: structured evidence
 
-Each event stores:
+Every `SignalEvent` stores structured **evidence** (`SignalEvidence` v1, schema in
+`packages/types/src/signals.ts`), not just a sentence:
 
-- `message`, for example "EMA 9 crossed above EMA 21 at $182.30" or "RSI 14 crossed upward through 30 (now 31.2)"
-- `values`, the rule's own values (`ema9`, `ema21`, `macd`, …) plus standard context:
-  `close`, `rsi14`, `volume`, `avgVolume20`, `volumeRatio`
-- `price`, `timeframe`, `candleTime` (open time of the completed candle), and `triggeredAt`
+```json
+{
+  "version": 1,
+  "type": "EMA_BULLISH_CROSS",
+  "symbol": "NVDA",
+  "timeframe": "5m",
+  "parameters": { "fast": 9, "slow": 21 },
+  "condition": { "previous": false, "current": true },
+  "previous": { "close": 181.9, "ema9": 181.42, "ema21": 181.55 },
+  "current":  { "close": 182.3, "ema9": 181.91, "ema21": 181.73 },
+  "candle": { "timestamp": "2026-09-25T13:40:00.000Z", "open": 181.9, "high": 182.4, "low": 181.8, "close": 182.3, "volume": 410000 },
+  "previousCandle": { "timestamp": "2026-09-25T13:35:00.000Z", "…": "…" },
+  "context": { "rsi14": 63.2, "volume": 410000, "avgVolume20": 256000, "volumeRatio": 1.6 },
+  "strength": { "score": 3, "maxScore": 5, "level": "HIGH", "direction": "up", "components": [ … ] }
+}
+```
+
+- `previous` and `current` hold the rule's own values on both candles, which is the
+  false → true transition that caused the event.
+- The app's **Signal explained** screen renders these values directly (previous candle,
+  current candle, price, timeframe, trigger time). The server's `message` is kept for push
+  notification text and for older clients.
+- Events recorded before Phase 2 have `evidence: null`; the app falls back to `values`.
+
+## Signal strength
+
+**Strength is technical-condition agreement, not expected return, probability, or
+investment quality.** It is never displayed as "strong buy" or "strong sell". The app words
+it as, for example, "HIGH · 3 of 5 conditions agree".
+
+The score is 1 (for the trigger) plus the number of enabled confirmations that agree with
+the signal's **direction**, evaluated on the trigger candle:
+
+| Confirmation | Agrees when (direction up / down)                      | Skipped for    |
+| ------------ | ------------------------------------------------------ | -------------- |
+| `volume`     | volume ≥ 1.5× the 20-period average (either direction) | volume signals |
+| `rsi`        | RSI 14 > 50 / < 50                                     | RSI signals    |
+| `trend`      | close > EMA 50 / < EMA 50                              | –              |
+| `macd`       | MACD histogram > 0 / < 0                               | MACD signals   |
+
+- **Levels:** 1 point → `LOW`, 2 → `MEDIUM`, 3+ → `HIGH` (thresholds are configurable in
+  `StrengthModel`).
+- **Direction** describes the movement a condition represents. For example, "RSI rose above
+  70" is `up` and a bearish EMA cross is `down`. It is not a judgement. Volume signals have no
+  direction, so they score 1/1 (LOW).
+- **Configuration:** `SIGNAL_STRENGTH_CONFIRMATIONS=volume,rsi,trend,macd` (any subset).
+- **Storage:** `SignalEvent.signalScore`, `maxSignalScore`, `signalStrength`, plus the
+  component breakdown in `evidence.strength`.
+- **User setting:** `minimumSignalStrength` (LOW / MEDIUM / HIGH). Notifications below it are
+  suppressed, but the events still appear in history.
 
 ## Adding a signal type
 
