@@ -9,6 +9,7 @@ import type {
   SignalCatalogEntry,
   SignalDTO,
   SignalEventDTO,
+  Timeframe,
   UpdateSignalBody,
   WatchlistItem,
 } from '@signals/types';
@@ -90,7 +91,8 @@ export const api = {
     request<void>(`/watchlist/${enc(symbol)}`, { method: 'PATCH', body: { alertsEnabled } }),
 
   searchAssets: (q: string) => request<{ results: AssetInfo[] }>(`/assets/search?q=${enc(q)}`),
-  asset: (symbol: string) => request<AssetDetail>(`/assets/${enc(symbol)}`),
+  asset: (symbol: string, timeframe?: Timeframe) =>
+    request<AssetDetail>(`/assets/${enc(symbol)}${timeframe ? `?timeframe=${timeframe}` : ''}`),
   assetSignals: (symbol: string) =>
     request<{ signals: SignalDTO[] }>(`/assets/${enc(symbol)}/signals`),
 

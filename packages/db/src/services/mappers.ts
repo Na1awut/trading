@@ -34,10 +34,11 @@ export function toSignalDTO(
   };
 }
 
-export function toSignalEventDTO(e: SignalEvent): SignalEventDTO {
+export function toSignalEventDTO(e: SignalEvent, currency = 'USD'): SignalEventDTO {
   return {
     id: e.id,
     ticker: e.ticker,
+    currency,
     signalDefinitionId: e.signalDefinitionId,
     signalType: e.signalType,
     category: e.category,

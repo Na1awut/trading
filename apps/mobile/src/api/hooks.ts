@@ -1,10 +1,10 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { NotificationSettings } from '@signals/types';
+import type { NotificationSettings, Timeframe } from '@signals/types';
 import { api } from './client';
 
 export const keys = {
   watchlist: ['watchlist'] as const,
-  asset: (s: string) => ['asset', s] as const,
+  asset: (s: string, tf?: string) => (tf ? (['asset', s, tf] as const) : (['asset', s] as const)),
   assetSignals: (s: string) => ['assetSignals', s] as const,
   events: (ticker?: string) => ['events', ticker ?? 'all'] as const,
   event: (id: string) => ['event', id] as const,
@@ -16,11 +16,12 @@ export const keys = {
 export const useWatchlist = () =>
   useQuery({ queryKey: keys.watchlist, queryFn: api.watchlist, refetchInterval: 15_000 });
 
-export const useAsset = (symbol: string) =>
+export const useAsset = (symbol: string, timeframe?: Timeframe) =>
   useQuery({
-    queryKey: keys.asset(symbol),
-    queryFn: () => api.asset(symbol),
+    queryKey: keys.asset(symbol, timeframe),
+    queryFn: () => api.asset(symbol, timeframe),
     refetchInterval: 15_000,
+    placeholderData: (previous) => previous, // keep showing data while switching timeframe
   });
 
 export const useAssetSignals = (symbol: string) =>

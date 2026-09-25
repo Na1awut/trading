@@ -65,6 +65,8 @@ export type IndicatorSnapshot = z.infer<typeof IndicatorSnapshotSchema>;
 export const SignalEventSchema = z.object({
   id: z.string(),
   ticker: z.string(),
+  /** Quote currency of the ticker, for formatting prices (e.g. THB for .BK listings). */
+  currency: z.string(),
   /** Null when the originating custom signal has since been deleted. */
   signalDefinitionId: z.string().nullable(),
   signalType: SignalTypeSchema,

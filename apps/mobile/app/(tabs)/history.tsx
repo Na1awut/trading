@@ -41,7 +41,11 @@ export default function HistoryScreen() {
           ) : null
         }
         renderItem={({ item }) => (
-          <SignalEventCard event={item} onPress={() => router.push(`/signals/events/${item.id}`)} />
+          <SignalEventCard
+            event={item}
+            currency={item.currency}
+            onPress={() => router.push(`/signals/events/${item.id}`)}
+          />
         )}
       />
     </View>

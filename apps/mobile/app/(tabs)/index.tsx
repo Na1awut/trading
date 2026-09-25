@@ -3,7 +3,8 @@ import { Link, Stack, useRouter } from 'expo-router';
 import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import type { WatchlistItem } from '@signals/types';
 import { useWatchlist, useWatchlistMutations } from '../../src/api/hooks';
-import { Button, ChangePill, EmptyState, ErrorState, Loading } from '../../src/components/ui';
+import { DataStatusBadge, WatchlistSkeleton } from '../../src/components/badges';
+import { Button, ChangePill, EmptyState, ErrorState } from '../../src/components/ui';
 import { formatPct, formatPrice, formatTime } from '../../src/lib/format';
 import { colors, spacing } from '../../src/theme';
 
@@ -34,7 +35,7 @@ export default function WatchlistScreen() {
     <View style={styles.screen}>
       <Stack.Screen options={{ headerRight: () => addButton }} />
       {isLoading ? (
-        <Loading />
+        <WatchlistSkeleton />
       ) : error ? (
         <ErrorState error={error} onRetry={() => void refetch()} />
       ) : (
@@ -80,13 +81,13 @@ export default function WatchlistScreen() {
                     value={item.quote.changePercent}
                     text={formatPct(item.quote.changePercent)}
                   />
-                  <Text style={styles.updated}>
-                    {item.quote.delayed ? 'Delayed · ' : ''}
-                    {formatTime(item.quote.timestamp)}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <DataStatusBadge status={item.dataStatus} delayed={item.quote.delayed} />
+                    <Text style={styles.updated}>{formatTime(item.quote.timestamp)}</Text>
+                  </View>
                 </View>
               ) : (
-                <Text style={styles.updated}>Price unavailable</Text>
+                <Text style={styles.updated}>{item.quoteError ?? 'Price unavailable'}</Text>
               )}
             </Pressable>
           )}

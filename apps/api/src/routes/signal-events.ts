@@ -1,6 +1,6 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { NotFoundError, listSignalEvents, toSignalEventDTO } from '@signals/db';
+import { NotFoundError, listSignalEvents, toSignalEventDTOs } from '@signals/db';
 import { SignalEventSchema, SignalEventsQuerySchema } from '@signals/types';
 import type { AppDeps } from '../deps';
 
@@ -39,7 +39,7 @@ export const signalEventRoutes: FastifyPluginAsyncZod<AppDeps> = async (app, dep
         where: { id: req.params.id, userId: req.user.id },
       });
       if (!event) throw new NotFoundError('Signal event not found');
-      return toSignalEventDTO(event);
+      return (await toSignalEventDTOs(deps.prisma, [event]))[0]!;
     },
   );
 };

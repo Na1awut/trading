@@ -79,7 +79,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('signedOut');
   }, []);
 
-  useEffect(() => {
+  // Register the API token getter DURING RENDER (once), reading current state from refs.
+  // Registering it in an effect raced with the first screen queries: React runs child
+  // effects before parent effects, so cold-start requests went out without a token (401).
+  const emailRef = useRef(email);
+  const statusRef = useRef(status);
+  emailRef.current = email;
+  statusRef.current = status;
+  const configured = useRef(false);
+  if (!configured.current) {
+    configured.current = true;
     configureApiAuth(
       async (forceRefresh) => {
         // Firebase caches the ID token and refreshes it before expiry; forceRefresh is used
@@ -87,13 +96,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (firebaseConfigured) {
           return (await getFirebaseAuth().currentUser?.getIdToken(forceRefresh)) ?? null;
         }
-        return email ? `dev:${email}` : null;
+        return emailRef.current ? `dev:${emailRef.current}` : null;
       },
       () => {
-        if (status === 'signedIn') void signOut();
+        if (statusRef.current === 'signedIn') void signOut();
       },
     );
-  }, [email, status, signOut]);
+  }
 
   const signIn = useCallback(async (rawEmail: string, password: string) => {
     const e = rawEmail.trim().toLowerCase();

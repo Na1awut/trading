@@ -1,18 +1,22 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { TIMEFRAMES, type Timeframe } from '@signals/types';
 import { useAsset, useWatchlist, useWatchlistMutations } from '../../../src/api/hooks';
+import { DataStatusBadge, DetailSkeleton } from '../../../src/components/badges';
 import { SignalEventCard } from '../../../src/components/SignalEventCard';
 import {
   Button,
   Card,
   ChangePill,
+  Chip,
   Disclaimer,
   ErrorState,
-  Loading,
   Row,
   SectionTitle,
 } from '../../../src/components/ui';
 import {
+  formatChange,
   formatCompact,
   formatDateTime,
   formatNumber,
@@ -33,22 +37,20 @@ export default function AssetDetailScreen() {
   const { symbol: raw } = useLocalSearchParams<{ symbol: string }>();
   const symbol = decodeURIComponent(raw ?? '').toUpperCase();
   const router = useRouter();
-  const { data, error, isLoading, refetch, isRefetching } = useAsset(symbol);
+  const [timeframe, setTimeframe] = useState<Timeframe | undefined>(undefined);
+  const { data, error, isLoading, refetch, isRefetching, isFetching } = useAsset(symbol, timeframe);
   const watchlist = useWatchlist();
   const { add, remove, setAlerts } = useWatchlistMutations();
   const item = watchlist.data?.items.find((i) => i.symbol === symbol);
 
-  if (isLoading) return <Loading />;
+  if (isLoading) return <DetailSkeleton />;
   if (error || !data) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
-  const {
-    asset,
-    quote,
-    indicators: ind,
-    currency = asset.currency,
-  } = { ...data, currency: data.asset.currency };
+  const { asset, quote, indicators: ind, dataStatus } = data;
+  const currency = asset.currency;
   const up = quote.change >= 0;
   const rsi = rsiHint(ind.rsi14);
+  const activeTf = timeframe ?? data.timeframe;
 
   return (
     <ScrollView
@@ -73,39 +75,47 @@ export default function AssetDetailScreen() {
         <ChangePill value={quote.changePercent} text={formatPct(quote.changePercent)} />
       </View>
       <Text style={[styles.change, { color: up ? colors.positive : colors.negative }]}>
-        {up ? '+' : ''}
-        {formatPrice(quote.change, currency)} today
+        {formatChange(quote.change, quote.price, currency)} today
       </Text>
-      <Text style={styles.timestamp}>
-        {quote.delayed ? 'Delayed data · ' : ''}Updated {formatDateTime(quote.timestamp)} · source:{' '}
-        {quote.source}
-      </Text>
+      <View style={styles.statusRow}>
+        <DataStatusBadge status={dataStatus.quote} delayed={quote.delayed} />
+        <Text style={styles.timestamp}>
+          Updated {formatDateTime(quote.timestamp)} · source: {quote.source}
+        </Text>
+      </View>
+      {dataStatus.quote.stale && dataStatus.quote.reason ? (
+        <Text style={styles.staleNote}>Price may be out of date: {dataStatus.quote.reason}.</Text>
+      ) : null}
 
-      {data.inWatchlist ? (
-        <View style={styles.actions}>
-          <View style={{ flex: 1 }}>
+      <View style={styles.actions}>
+        <View style={{ flex: 1 }}>
+          {data.inWatchlist ? (
             <Button
               title="Configure signals"
               onPress={() => router.push(`/asset/${encodeURIComponent(symbol)}/signals`)}
             />
-          </View>
-        </View>
-      ) : (
-        <View style={styles.actions}>
-          <View style={{ flex: 1 }}>
+          ) : (
             <Button
               title="Add to watchlist"
               onPress={() => add.mutate(symbol)}
               loading={add.isPending}
             />
-          </View>
+          )}
         </View>
-      )}
+      </View>
 
-      <SectionTitle>
-        Indicators · {data.timeframe}
-        {data.indicatorsAsOf ? ` · candle ${formatTime(data.indicatorsAsOf)}` : ''}
+      <SectionTitle
+        right={
+          isFetching && !isRefetching ? <Text style={styles.footnote}>Loading…</Text> : undefined
+        }
+      >
+        Indicators
       </SectionTitle>
+      <View style={styles.chips} accessibilityRole="tablist">
+        {TIMEFRAMES.map((tf) => (
+          <Chip key={tf} label={tf} selected={tf === activeTf} onPress={() => setTimeframe(tf)} />
+        ))}
+      </View>
       <Card>
         <Row label="EMA 9" value={formatPrice(ind.ema9, currency)} />
         <Row label="EMA 21" value={formatPrice(ind.ema21, currency)} />
@@ -141,7 +151,13 @@ export default function AssetDetailScreen() {
           }
         />
       </Card>
-      <Text style={styles.footnote}>Calculated on completed {data.timeframe} candles.</Text>
+      <View style={styles.statusRow}>
+        <DataStatusBadge status={dataStatus.candles} />
+        <Text style={styles.footnote}>
+          Calculated on completed {activeTf} candles
+          {data.indicatorsAsOf ? ` · last candle opened ${formatTime(data.indicatorsAsOf)}` : ''}.
+        </Text>
+      </View>
 
       <SectionTitle>Recent signals</SectionTitle>
       {data.recentEvents.length === 0 ? (
@@ -202,9 +218,18 @@ const styles = StyleSheet.create({
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.lg },
   price: { color: colors.text, fontSize: 36, fontWeight: '800', fontVariant: ['tabular-nums'] },
   change: { fontSize: 15, fontWeight: '600', marginTop: 2 },
-  timestamp: { color: colors.textFaint, fontSize: 12, marginTop: 4 },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  timestamp: { color: colors.textFaint, fontSize: 12 },
+  staleNote: { color: colors.warning, fontSize: 12, marginTop: 4 },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
-  footnote: { color: colors.textFaint, fontSize: 11, marginTop: spacing.sm },
+  chips: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  footnote: { color: colors.textFaint, fontSize: 11 },
   empty: { color: colors.textMuted },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   switchLabel: { color: colors.text, fontSize: 15, fontWeight: '600' },

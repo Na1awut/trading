@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SIGNAL_CATEGORY_LABELS, type SignalEventDTO } from '@signals/types';
 import { formatDateTime, formatNumber, formatPrice } from '../lib/format';
+import { StrengthBadge } from './badges';
 import { colors, spacing } from '../theme';
 
 const CATEGORY_COLOR: Record<SignalEventDTO['category'], string> = {
@@ -48,6 +49,11 @@ export function SignalEventCard({
         <Text style={styles.time}>{formatDateTime(event.triggeredAt)}</Text>
       </View>
       <Text style={styles.message}>{event.message}</Text>
+      <StrengthBadge
+        level={event.signalStrength}
+        score={event.signalScore}
+        max={event.maxSignalScore}
+      />
       <View style={styles.facts}>
         {facts.map((f) => (
           <View key={f.label} style={styles.fact}>

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import {
   SIGNAL_CATEGORIES,
   SIGNAL_CATEGORY_GROUP_LABELS,
+  SIGNAL_STRENGTHS,
   type SignalCategory,
 } from '@signals/types';
 import { API_URL, api } from '../../src/api/client';
@@ -12,6 +13,7 @@ import { registerForPush } from '../../src/notifications/push';
 import {
   Button,
   Card,
+  Chip,
   Disclaimer,
   ErrorState,
   Loading,
@@ -46,6 +48,80 @@ function ToggleRow({
         trackColor={{ true: colors.positive, false: colors.cardRaised }}
       />
     </View>
+  );
+}
+
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function QuietHoursCard({
+  start,
+  end,
+  timezone,
+  saving,
+  onSave,
+}: {
+  start: string | null;
+  end: string | null;
+  timezone: string;
+  saving: boolean;
+  onSave: (patch: {
+    quietHoursStart?: string | null;
+    quietHoursEnd?: string | null;
+    timezone?: string;
+  }) => void;
+}) {
+  const [from, setFrom] = useState(start ?? '22:00');
+  const [to, setTo] = useState(end ?? '07:00');
+  const [error, setError] = useState<string | null>(null);
+  const enabled = Boolean(start && end && start !== end);
+  const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  const save = (on: boolean) => {
+    setError(null);
+    if (!on) return onSave({ quietHoursStart: null, quietHoursEnd: null });
+    if (!HHMM.test(from) || !HHMM.test(to)) return setError('Use 24-hour HH:mm, e.g. 22:00');
+    if (from === to) return setError('Start and end must differ');
+    onSave({ quietHoursStart: from, quietHoursEnd: to });
+  };
+
+  return (
+    <Card style={{ gap: spacing.md }}>
+      <ToggleRow
+        label="Pause notifications at night"
+        hint="Signals are still recorded; their notifications are delivered when quiet hours end."
+        value={enabled}
+        onChange={save}
+      />
+      <View style={styles.timeRow}>
+        <TextInput
+          style={styles.timeInput}
+          value={from}
+          onChangeText={setFrom}
+          placeholder="22:00"
+          placeholderTextColor={colors.textFaint}
+          maxLength={5}
+        />
+        <Text style={styles.note}>to</Text>
+        <TextInput
+          style={styles.timeInput}
+          value={to}
+          onChangeText={setTo}
+          placeholder="07:00"
+          placeholderTextColor={colors.textFaint}
+          maxLength={5}
+        />
+        <Button title="Save" variant="secondary" onPress={() => save(true)} loading={saving} />
+      </View>
+      {error ? <Text style={{ color: colors.negative }}>{error}</Text> : null}
+      <Row label="Timezone" value={timezone} />
+      {deviceTz && deviceTz !== timezone ? (
+        <Button
+          title={`Use this device's timezone (${deviceTz})`}
+          variant="secondary"
+          onPress={() => onSave({ timezone: deviceTz })}
+        />
+      ) : null}
+    </Card>
   );
 }
 
@@ -117,19 +193,32 @@ export default function SettingsScreen() {
         </Text>
       </Card>
 
-      <SectionTitle>Coming soon</SectionTitle>
+      <SectionTitle>Quiet hours</SectionTitle>
+      <QuietHoursCard
+        start={s.quietHoursStart}
+        end={s.quietHoursEnd}
+        timezone={s.timezone}
+        saving={update.isPending}
+        onSave={(patch) => update.mutate(patch)}
+      />
+
+      <SectionTitle>Minimum signal strength</SectionTitle>
       <Card>
-        <Row label="Timezone" value={s.timezone} />
-        <Row
-          label="Quiet hours"
-          value={
-            s.quietHoursStart && s.quietHoursEnd ? `${s.quietHoursStart}–${s.quietHoursEnd}` : 'Off'
-          }
-        />
-        <Row
-          label="Frequency"
-          value={s.notificationFrequency === 'REALTIME' ? 'Real-time' : s.notificationFrequency}
-        />
+        <View style={styles.chips}>
+          {SIGNAL_STRENGTHS.map((level) => (
+            <Chip
+              key={level}
+              label={level}
+              selected={s.minimumSignalStrength === level}
+              onPress={() => update.mutate({ minimumSignalStrength: level })}
+            />
+          ))}
+        </View>
+        <Text style={styles.note}>
+          Strength counts how many technical conditions agree (e.g. volume and trend confirming a
+          crossover). LOW notifies for every signal. Muted signals still appear in History. It is
+          not a measure of expected return.
+        </Text>
       </Card>
 
       <SectionTitle>Push</SectionTitle>
@@ -165,5 +254,17 @@ const styles = StyleSheet.create({
   },
   toggleLabel: { color: colors.text, fontSize: 15, fontWeight: '600' },
   toggleHint: { color: colors.textMuted, fontSize: 12, marginTop: 2, lineHeight: 17 },
+  chips: { flexDirection: 'row', gap: spacing.sm },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  timeInput: {
+    backgroundColor: colors.cardRaised,
+    color: colors.text,
+    fontSize: 16,
+    borderRadius: 10,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    width: 76,
+    textAlign: 'center',
+  },
   note: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: spacing.sm },
 });

@@ -11,6 +11,22 @@ export function formatPrice(value: number | null | undefined, currency = 'USD'):
   return sym ? `${sym}${n}` : `${n} ${currency}`;
 }
 
+/**
+ * Signed price change: "+$1.06", "−$0.96". Precision follows the PRICE (sub-$1 assets
+ * need 4 decimals), not the size of the change.
+ */
+export function formatChange(change: number, price: number, currency = 'USD'): string {
+  if (!Number.isFinite(change)) return '—';
+  const decimals = Math.abs(price) < 1 ? 4 : 2;
+  const abs = Math.abs(change).toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+  const sym = CURRENCY[currency];
+  const body = sym ? `${sym}${abs}` : `${abs} ${currency}`;
+  return `${change < 0 ? '−' : '+'}${body}`;
+}
+
 export function formatNumber(value: number | null | undefined, decimals = 2): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
   return value.toLocaleString('en-US', {
@@ -35,6 +51,16 @@ export function formatCompact(value: number | null | undefined): string {
 
 export function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Local time with seconds, e.g. "09:42:00". */
+export function formatTimeSeconds(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
 }
 
 export function formatDateTime(iso: string): string {
