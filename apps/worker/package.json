@@ -13,7 +13,11 @@
     "test": "vitest run",
     "verify:market-data": "tsx scripts/verify-market-data.ts",
     "validate:market-data": "tsx scripts/validate-market-data.ts",
-    "validate:security": "tsx scripts/validation/process-security.ts"
+    "validate:security": "tsx scripts/validation/process-security.ts",
+    "validate:idempotency": "tsx scripts/validation/worker-idempotency.ts",
+    "validate:load": "tsx scripts/validation/load-simulation.ts",
+    "validate:db-growth": "tsx scripts/validation/db-growth.ts",
+    "validate:push": "tsx scripts/validation/validate-push.ts"
   },
   "dependencies": {
     "@signals/config": "workspace:*",

@@ -48,6 +48,7 @@ async function main() {
     sendingTimeoutMs: config.NOTIFICATION_SENDING_TIMEOUT_MS,
     maxAgeMs: config.NOTIFICATION_MAX_AGE_MS,
     sweepBatch: config.NOTIFICATION_SWEEP_BATCH,
+    concurrency: config.NOTIFICATION_DELIVERY_CONCURRENCY,
   };
   const notifier = createNotificationSender(config.NOTIFICATION_DRIVER, logger, {
     projectId: config.FIREBASE_PROJECT_ID,

@@ -10,6 +10,7 @@ import type { Metrics } from '@signals/config';
 import type { WorkerLogger } from '../evaluation-cycle';
 import { evaluatePreferences } from './preferences';
 import { DEFAULT_DELIVERY_SETTINGS, retryDelayMs, type DeliverySettings } from './settings';
+import { mapWithConcurrency } from '../concurrency';
 
 export interface DeliveryDeps {
   prisma: PrismaClient;
@@ -290,13 +291,13 @@ export async function runNotificationSweep(
     select: { id: true },
   });
   const summary: SweepSummary = { candidates: due.length, outcomes: {} };
-  for (const { id } of due) {
+  await mapWithConcurrency(due, Math.max(1, s.concurrency), async ({ id }) => {
     try {
       const outcome = await deliverEvent(deps, id, nowMs);
       summary.outcomes[outcome] = (summary.outcomes[outcome] ?? 0) + 1;
     } catch (err) {
       deps.logger.error({ err, eventId: id }, 'delivery sweep error');
     }
-  }
+  });
   return summary;
 }

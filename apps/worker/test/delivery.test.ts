@@ -14,7 +14,9 @@ import {
   runNotificationSweep,
   type DeliveryDeps,
 } from '../src/notifications/delivery';
+import { fanOutSignal } from '../src/notifications/events';
 import { DEFAULT_DELIVERY_SETTINGS, retryDelayMs } from '../src/notifications/settings';
+import type { SignalEvaluation } from '@signals/signal-engine';
 
 const prisma = createPrismaClient(testDatabaseUrl('worker_test'));
 const silent = { info() {}, warn() {}, error() {} };
@@ -356,5 +358,59 @@ describe('minimum strength and per-signal switches', () => {
     });
     expect(await deliverEvent(deps(), event.id, T0)).toBe('SUPPRESSED');
     expect((await reload(event.id)).notificationError).toBe('signal disabled');
+  });
+});
+
+describe('fan-out at scale', () => {
+  it('records all subscribers in batches, delivers in parallel, and absorbs a concurrent duplicate fan-out', async () => {
+    notifier = new RecordingNotificationSender();
+    const users = 40;
+    for (let i = 0; i < users; i++) {
+      const u = await findOrCreateUser(prisma, {
+        firebaseUid: `dev:fan-${i}@example.com`,
+        email: `fan-${i}@example.com`,
+      });
+      await addToWatchlist(prisma, {
+        userId: u.id,
+        asset: MOCK_ASSETS.find((a) => a.symbol === 'NVDA')!,
+        timeframe: '5m',
+      });
+      await prisma.device.create({
+        data: { userId: u.id, token: `fan-device-${i}`, platform: 'android' },
+      });
+    }
+    const def = await prisma.signalDefinition.findFirstOrThrow({
+      where: { name: 'EMA 9/21 Bullish Cross' },
+    });
+    const evaluation = {
+      signalType: 'EMA_BULLISH_CROSS',
+      category: 'MOVING_AVERAGE',
+      label: 'EMA 9/21 Bullish Cross',
+      evaluable: true,
+      previousActive: false,
+      active: true,
+      triggered: true,
+      candleTime: T0 - 450_000,
+      price: 182.3,
+      values: { close: 182.3 },
+      evidence: null,
+      message: 'EMA 9 crossed above EMA 21',
+    } as SignalEvaluation;
+    const d: DeliveryDeps = { ...deps(), delivery: { ...S, concurrency: 6 } };
+
+    // Two workers fan out the same candle at the same time.
+    const [a, b] = await Promise.all([
+      fanOutSignal(d, def, evaluation, T0),
+      fanOutSignal(d, def, evaluation, T0),
+    ]);
+    expect(a.created + b.created).toBe(users);
+    expect(a.duplicates + b.duplicates).toBe(users);
+    expect(a.notificationsSent + b.notificationsSent).toBe(users);
+    expect(await prisma.signalEvent.count()).toBe(users);
+    expect(await prisma.signalEvent.count({ where: { notificationStatus: 'SENT' } })).toBe(users);
+    // One push per user, never two.
+    const tokens = notifier.sent.flatMap((s) => s.targets.map((t) => t.token));
+    expect(tokens).toHaveLength(users);
+    expect(new Set(tokens).size).toBe(users);
   });
 });

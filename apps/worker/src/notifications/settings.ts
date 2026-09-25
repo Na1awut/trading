@@ -9,6 +9,8 @@ export interface DeliverySettings {
   /** Undelivered events older than this are abandoned (no stale alerts). */
   maxAgeMs: number;
   sweepBatch: number;
+  /** Events delivered in parallel per fan-out / sweep (each is one push request). */
+  concurrency: number;
   /** Minimum strength enforcement / quiet hours are applied at send time (see preferences). */
 }
 
@@ -19,6 +21,7 @@ export const DEFAULT_DELIVERY_SETTINGS: DeliverySettings = {
   sendingTimeoutMs: 120_000,
   maxAgeMs: 24 * 3_600_000,
   sweepBatch: 100,
+  concurrency: 8,
 };
 
 /** Back-off after `attempt` failed attempts: base, 2x, 4x ... capped. */

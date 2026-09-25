@@ -64,6 +64,8 @@ const EnvSchema = z
     /** Undelivered notifications older than this are abandoned (never send stale alerts). */
     NOTIFICATION_MAX_AGE_MS: ms(24 * 3_600_000, 60_000),
     NOTIFICATION_SWEEP_BATCH: z.coerce.number().int().min(1).max(1000).default(100),
+    /** Push requests in flight per worker during fan-out and the retry sweep. */
+    NOTIFICATION_DELIVERY_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(8),
 
     /* ---------------------------- Market data -------------------------- */
     MARKET_DATA_PROVIDER: z.enum(['mock', 'real']).default('mock'),
